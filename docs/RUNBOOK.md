@@ -24,7 +24,7 @@
    - `TAXAUTO_HOME = C:\taxauto`
    - (선택) `TAXAUTO_USER = 홍길동` — 검토 처리 기록에 남는 이름
    - (선택) `ANTHROPIC_API_KEY` — `policy.yaml` 의 `llm.enabled: true` 일 때만
-   - (선택) `DATA_GO_KR_API_KEY` — 국세청 사업자 상태조회(`nts_status.enabled: true`)
+   - (선택) `NTS_SERVICE_KEY` — 국세청 사업자 상태조회(`nts_status.enabled: true`)
    - (선택) `TAXAUTO_AGENT = 1` — 야간 실행 뒤 Claude 에이전트(헤드리스)도 돌릴 때
 6. **폴더를 초기화한다.** `taxauto init` 을 실행하면 `clients/ inbox/ data/ logs/` 가 생기고 예시 명부가 복사된다.
 7. **거래처 명부를 작성한다.** `clients\clients.yaml` 을 실제 거래처로 바꾼다. 형식은 `examples/clients.example.yaml` 을 따른다.

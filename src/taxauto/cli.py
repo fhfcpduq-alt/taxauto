@@ -35,7 +35,7 @@ from .pipeline import (
 )
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "examples"
-API_KEY_ENVS = ["ANTHROPIC_API_KEY", "DATA_GO_KR_API_KEY"]
+API_KEY_ENVS = ["ANTHROPIC_API_KEY", "NTS_SERVICE_KEY"]
 STATUS_KO = {"ok": "완료", "failed": "실패", "not_implemented": "미구현", "skipped": "제외", "pending": "대기"}
 
 
@@ -360,7 +360,7 @@ def cmd_doctor(args, paths: Paths) -> int:
             ok(f"환경변수 {k}: 설정됨")
         else:
             needed = (k == "ANTHROPIC_API_KEY" and (policy.get("llm") or {}).get("enabled")) or (
-                k == "DATA_GO_KR_API_KEY" and (policy.get("nts_status") or {}).get("enabled"))
+                k == "NTS_SERVICE_KEY" and (policy.get("nts_status") or {}).get("enabled"))
             (warn if needed else ok)(f"환경변수 {k}: 없음" + (" — 정책에서 기능이 켜져 있음" if needed else " (해당 기능 꺼짐)"))
 
     # 7) 선택 패키지
