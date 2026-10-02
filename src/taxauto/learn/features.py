@@ -69,9 +69,15 @@ def clean_name(name: str) -> str:
     return " ".join(s.split())
 
 
-def _brands(cfg: dict) -> list[str]:
-    b = [compact(x) for x in (cfg.get("names") or {}).get("brands") or []]
-    return sorted({x for x in b if x}, key=len, reverse=True)
+def _brands(cfg: dict) -> list[tuple[str, str]]:
+    """(비교 접두어, 대표 브랜드) 목록 - 긴 접두어 우선."""
+    ncfg = cfg.get("names") or {}
+    pairs = {(compact(x), compact(x)) for x in ncfg.get("brands") or [] if compact(x)}
+    for canon, aliases in (ncfg.get("brand_aliases") or {}).items():
+        for a in aliases or []:
+            if compact(a):
+                pairs.add((compact(a), compact(canon)))
+    return sorted(pairs, key=lambda p: (-len(p[0]), p[0]))
 
 
 def display_name(name: str, cfg: dict | None = None) -> str:
@@ -93,14 +99,14 @@ def normalize_name(name: str, cfg: dict | None = None) -> str:
     c = compact(display_name(name, cfg))
     if not c:
         return ""
-    for b in _brands(cfg):
+    for b, canon in _brands(cfg):
         if c == b:
-            return b
+            return canon
         if c.startswith(b):
             rest = c[len(b):]
             # 짧은 브랜드(cu, kt)는 뒤가 한글(지점명)일 때만 인정
             if len(b) >= 3 or _HANGUL.match(rest[:1] or "") or rest[:1].isdigit():
-                return b
+                return canon
     return c
 
 

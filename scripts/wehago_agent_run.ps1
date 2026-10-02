@@ -10,6 +10,7 @@ $ErrorActionPreference = "Continue"
 $Root = if ($env:TAXAUTO_HOME) { $env:TAXAUTO_HOME } else { Split-Path -Parent $PSScriptRoot }
 Set-Location $Root
 $env:PYTHONIOENCODING = "utf-8"
+$env:TAXAUTO_WEHAGO_AGENT = "1"   # 안전장치 훅의 Bash 검사 활성화(에이전트 실행에서만)
 $Today = Get-Date -Format "yyyy-MM-dd"
 New-Item -ItemType Directory -Force -Path "$Root\logs" | Out-Null
 $Log = "$Root\logs\$Today.wehago_agent.log"

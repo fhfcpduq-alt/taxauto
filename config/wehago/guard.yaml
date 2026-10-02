@@ -162,6 +162,9 @@ blocked_keys:
 # 클릭할 때 element 설명이 이보다 짧으면 차단(무엇을 누르는지 설명 없이 ref 만으로 누르는 것 방지)
 min_click_description_chars: 2
 
+# Bash 명령 검사 범위: agent_only = 위하고 에이전트 실행(환경변수 TAXAUTO_WEHAGO_AGENT=1)에서만 / always / off
+# (개발 세션에서 문서 작성 명령까지 막지 않기 위해 기본 agent_only. 브라우저 도구 검사는 항상 켜져 있다)
+bash_check: agent_only
 # Bash 명령 검사: 이 글자가 있으면 차단 (에이전트가 Playwright MCP·재생기를 우회해 브라우저를 직접 조종하는 것 방지)
 bash_forbidden:
   - "9222"

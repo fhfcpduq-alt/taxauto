@@ -265,6 +265,11 @@ class Guard:
         tool_name = str(tool_name or "")
         ti = tool_input if isinstance(tool_input, dict) else {}
         if tool_name == "Bash":
+            # 기본은 위하고 에이전트 실행(TAXAUTO_WEHAGO_AGENT=1, scripts/wehago_agent_run.ps1 이 설정)에서만 검사.
+            # 개발 세션에서 문서·테스트 명령까지 막지 않기 위함. 이 환경변수는 Claude Code 프로세스 것이라 에이전트가 못 바꾼다.
+            mode = str(self.cfg.get("bash_check") or "agent_only")
+            if mode == "off" or (mode == "agent_only" and os.environ.get("TAXAUTO_WEHAGO_AGENT") != "1"):
+                return ALLOW
             return self.check_bash(ti.get("command"))
         m = _BROWSER_TOOL.match(tool_name)
         if not m:

@@ -16,9 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts" / "hooks" / "wehago_guard.py"
 
 
-def run_hook(payload, tmp_path, raw: str | None = None) -> subprocess.CompletedProcess:
+def run_hook(payload, tmp_path, raw: str | None = None, agent: bool = True) -> subprocess.CompletedProcess:
     env = {**os.environ, "TAXAUTO_HOME": str(tmp_path), "PYTHONIOENCODING": "utf-8"}
     env.pop("CLAUDE_PROJECT_DIR", None)
+    env.pop("TAXAUTO_WEHAGO_AGENT", None)
+    if agent:
+        env["TAXAUTO_WEHAGO_AGENT"] = "1"
     data = raw if raw is not None else json.dumps(payload, ensure_ascii=False)
     return subprocess.run([sys.executable, str(HOOK)], input=data.encode("utf-8"), capture_output=True, env=env, timeout=60)
 
@@ -88,6 +91,14 @@ def test_hook_blocks(payload, tmp_path):
 def test_hook_allows(payload, tmp_path):
     r = run_hook(payload, tmp_path)
     assert r.returncode == 0, r.stderr.decode("utf-8", "replace")
+
+
+def test_bash_check_only_in_agent_runs(tmp_path):
+    cmd = {"tool_name": "Bash", "tool_input": {"command": "curl http://127.0.0.1:9222/json/version"}}
+    assert run_hook(cmd, tmp_path, agent=True).returncode == 2
+    assert run_hook(cmd, tmp_path, agent=False).returncode == 0      # 개발 세션은 Bash 검사 안 함
+    click = pw("browser_click", element="전자신고 제출", target="e1")
+    assert run_hook(click, tmp_path, agent=False).returncode == 2    # 브라우저 도구는 항상 검사
 
 
 def test_hook_malformed_input_fails_closed(tmp_path):
