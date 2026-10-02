@@ -3,12 +3,12 @@
 from datetime import date
 
 from calc_fixtures import (
-    POLICY, C, buy_card, buy_ti, client, filing, make_law, sale_card, sale_ti, tx, v,
+    POLICY, C, buy_card, buy_ti, client, filing, make_law, sale_card, sale_ti, tx,
 )
 
 from taxauto.models import (
     CardKind, DocType, Direction, ExclusionReason, Line, NonDeductibleReason, PurchaseCategory, Source,
-    TaxpayerType, Transaction,
+    TaxpayerType,
 )
 from taxauto.registry import Adjustment, FilingSettings
 from taxauto.compute.vat_return import compute_return, compute_return_detailed

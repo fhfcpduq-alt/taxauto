@@ -1,0 +1,61 @@
+# 위하고 매입매출전표 '엑셀 업로드' 양식 컬럼 매핑  (taxauto.wehago.upload_file 이 읽는다)
+#
+# ※ 실제 위하고 업로드 양식은 아직 확인하지 못했다(계정 없음). 아래는 전부 '추정'이다.
+#   학습모드(wehago-learn 스킬)에서 위하고가 제공하는 업로드 샘플 양식을 내려받아
+#   config/wehago/samples/ 에 두고, 헤더 이름·순서·코드 체계를 확인한 뒤 고치고 confirmed: true 로 바꾼다.
+#   confirmed: false 인 동안 에이전트는 이 파일로 만든 xlsx 를 위하고에 '업로드하지 않는다'(사람 확인 후에만).
+
+version: 1
+confirmed: false              # ← 학습모드에서 확정
+confirmed_note: "미확인 — 학습모드에서 위하고 업로드 샘플과 대조할 것"
+sheet_name: 매입매출전표
+header_row: 1                  # 헤더가 있는 행(1부터). 위하고 양식에 안내 문구 행이 있으면 조정
+start_row: 2
+
+# 업로드 대상: 위하고가 홈택스에서 자동으로 가져오지 못하는 자료만(추정).
+# 전자세금계산서·카드·현금영수증은 위하고 '홈택스 자료 수집'으로 들어오므로 기본 제외 → 수정은 작업지시서로.
+include_sources: [PAPER_TAX_INVOICE, MANUAL, OTHER_SALES]   # models.Source 이름. [ALL] 이면 전부(위하고 전표 내보내기분 제외)
+exclude_categories: [NOT_APPLICABLE]                          # models.PurchaseCategory 이름
+
+# field 에 쓸 수 있는 값
+#   tx_date supply_amount vat total counterparty_name counterparty_biz_no approval_no item memo
+#   direction(매출/매입) entry_type(유형 이름) entry_type_code(유형 코드)
+#   account_code account_name summary_text settlement settlement_code
+#   non_deductible_reason non_deductible_reason_code electronic(전자 여부 1/0) card_no_masked
+# format: date | yyyymmdd | yyyy-mm-dd | mm | dd | biz_dash | int
+columns:
+  - {header: 일자, field: tx_date, format: yyyymmdd}
+  - {header: 유형, field: entry_type_code}
+  - {header: 거래처명, field: counterparty_name}
+  - {header: 사업자등록번호, field: counterparty_biz_no, format: biz_dash}
+  - {header: 품목, field: item}
+  - {header: 공급가액, field: supply_amount, format: int}
+  - {header: 부가세, field: vat, format: int}
+  - {header: 합계, field: total, format: int}
+  - {header: 전자, field: electronic}
+  - {header: 승인번호, field: approval_no}
+  - {header: 계정코드, field: account_code}
+  - {header: 계정과목, field: account_name}
+  - {header: 적요, field: summary_text}
+  - {header: 분개유형, field: settlement_code}
+  - {header: 불공제사유, field: non_deductible_reason_code}
+
+# 위하고(더존) 매입매출 유형 코드 — 더존 Smart A 기준 기억값(추정). config/columns.yaml vat_type_map 과 같은 체계.
+entry_type_codes:
+  매출: {과세: "11", 영세: "12", 면세: "13", 건별: "14", 간이: "15", 수출: "16", 카과: "17", 카면: "18", 카영: "19", 면건: "20", 현과: "22", 현면: "23", 현영: "24"}
+  매입: {과세: "51", 영세: "52", 면세: "53", 불공: "54", 수입: "55", 카과: "57", 카면: "58", 현과: "61", 현면: "62"}
+
+# 분개유형 코드 (추정: 0 분개없음 1 현금 2 외상 3 혼합 4 카드)
+settlement_codes: {현금: "1", 외상: "2", 혼합: "3", 카드: "4"}
+
+# 불공제 사유 코드: 위하고 코드 체계 미확인 → 학습모드에서 채움. null 이면 사유 '이름'을 그대로 넣는다.
+non_deductible_reason_codes:
+  필요적기재사항누락: null
+  사업과직접관련없는지출: null
+  비영업용소형승용자동차: null
+  접대비및이와유사한비용: null
+  면세사업등관련: null
+  토지의자본적지출관련: null
+  사업자등록전매입세액: null
+  공통매입세액면세사업분: null
+  기타: null

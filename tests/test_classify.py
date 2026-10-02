@@ -4,7 +4,6 @@ import json
 from datetime import date
 from types import SimpleNamespace
 
-import pytest
 
 from calc_fixtures import POLICY, buy_card, buy_ti, client, make_law, sale_card, tx
 

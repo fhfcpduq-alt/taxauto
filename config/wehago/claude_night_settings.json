@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "deny": [
+      "Edit(config/wehago/guard.yaml)",
+      "Edit(config/wehago/limits.yaml)",
+      "Edit(config/wehago/claude_night_settings.json)",
+      "Edit(config/law/**)",
+      "Edit(config/policy.yaml)",
+      "Edit(scripts/**)",
+      "Edit(src/**)",
+      "Edit(.claude/**)",
+      "Edit(.mcp.json)",
+      "Edit(clients/**)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(git *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(powershell *)",
+      "Bash(pwsh *)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}

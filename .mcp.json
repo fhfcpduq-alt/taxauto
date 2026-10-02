@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "@playwright/mcp@latest",
+        "--cdp-endpoint",
+        "http://127.0.0.1:9222",
+        "--output-dir",
+        "data/_playwright",
+        "--init-script",
+        "scripts/wehago_guard_init.js",
+        "--blocked-origins",
+        "https://www.hometax.go.kr;https://hometax.go.kr;https://www.nts.go.kr",
+        "--no-webmcp",
+        "--timeout-action",
+        "10000"
+      ]
+    }
+  }
+}

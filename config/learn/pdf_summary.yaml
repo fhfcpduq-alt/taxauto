@@ -1,0 +1,60 @@
+# 세무사 '매출/매입 요약 보고서' PDF 파서 설정 (taxauto.learn.pdf_summary)
+# 실제 양식 미확인 → '라벨 근처 숫자' 휴리스틱. 양식이 오면 라벨 별칭만 추가한다.
+# 비교는 공백 제거·소문자. 줄의 '숫자 앞 글자'(라벨부)에서 구역어(매출/매입)·번호(1. ①)를 떼고
+#  ① 별칭과 완전일치 → ② 라벨부가 별칭으로 끝남(가장 긴 별칭 우선) 순으로 항목을 정한다.
+
+version: 1
+
+sections:
+  sales: [매출, 매출내역, 매출현황, 매출집계, 과세표준및매출세액, 매출분]
+  purchase: [매입, 매입내역, 매입현황, 매입집계, 매입세액, 매입분]
+
+# 표 머리글 → 숫자 열 순서(count/amount/tax). 머리글 줄을 만나면 이후 줄에 적용.
+column_headers:
+  count: [매수, 건수, 장수]
+  amount: [공급가액, 금액, 과세표준, 공급대가]
+  tax: [세액, 부가세, 부가가치세, 매출세액, 매입세액]
+
+items:
+  sales.tax_invoice: {section: sales, labels: [세금계산서, 전자세금계산서, 세금계산서발급분, 과세세금계산서, 세금계산서매출]}
+  sales.card: {section: sales, labels: [신용카드, 카드, 신용카드매출, 카드매출, 신용카드발행분]}
+  sales.cash_receipt: {section: sales, labels: [현금영수증, 현금영수증매출, 현금영수증발행분]}
+  sales.card_cash: {section: sales, labels: [신용카드·현금영수증, 신용카드현금영수증, 신용카드현금영수증발행분, 카드현금영수증]}
+  sales.other: {section: sales, labels: [기타, 기타매출, 현금매출, 정규영수증외, 정규영수증외매출분]}
+  sales.zero_rated: {section: sales, labels: [영세율, 영세, 영세율매출]}
+  sales.invoice: {section: sales, labels: [계산서, 면세, 면세매출, 계산서발급분]}
+  sales.total: {section: sales, labels: [합계, 계, 매출합계, 총매출]}
+  purchase.tax_invoice: {section: purchase, labels: [세금계산서, 전자세금계산서, 세금계산서수취분, 세금계산서매입]}
+  purchase.card: {section: purchase, labels: [신용카드, 카드, 신용카드매입, 카드매입, 사업용카드]}
+  purchase.cash_receipt: {section: purchase, labels: [현금영수증, 현금영수증매입]}
+  purchase.card_cash: {section: purchase, labels: [신용카드·현금영수증, 신용카드현금영수증, 신용카드매출전표등수령분, 그밖의공제매입세액]}
+  purchase.invoice: {section: purchase, labels: [계산서, 면세, 면세매입, 계산서수취분]}
+  purchase.non_deductible: {section: any, labels: [불공제, 불공제매입, 공제받지못할매입세액, 매입불공제, 불공]}
+  purchase.total: {section: purchase, labels: [합계, 계, 매입합계, 총매입]}
+  payable: {section: any, labels: [납부(환급)세액, 납부환급세액, 납부세액, 환급세액, 납부할세액]}
+  final: {section: any, labels: [차가감납부할세액, 차가감하여납부할세액, 최종납부세액, 차가감납부(환급)세액]}
+
+# 한 숫자만 있을 때 어느 칸으로 볼지(기본 amount)
+single_value_as:
+  payable: tax
+  final: tax
+  purchase.non_deductible: tax
+
+text_fields:
+  company_name: [상호, 회사명, 거래처명, 법인명, 업체명]
+  biz_no: [사업자번호, 사업자등록번호, 등록번호]
+  period: [기간, 과세기간, 신고기간, 조회기간, 신고구분]
+
+# 엔진 신고서(VatReturn)와 대사: pdf 항목(여러 개면 합) ↔ 신고서 칸(Line 이름, 합) 또는 card_receipt_summary
+compare:
+  - {pdf: [sales.tax_invoice], lines: [S_TAX_INVOICE, S_BUYER_ISSUED], label: 매출 세금계산서}
+  - {pdf: [sales.card, sales.cash_receipt, sales.card_cash], lines: [S_CARD_CASH], label: 매출 신용카드·현금영수증}
+  - {pdf: [sales.other], lines: [S_OTHER], label: 매출 기타}
+  - {pdf: [sales.zero_rated], lines: [S_ZR_TAX_INVOICE, S_ZR_OTHER], label: 매출 영세율}
+  - {pdf: [sales.total], lines: [S_TOTAL], label: 매출 합계}
+  - {pdf: [purchase.tax_invoice], lines: [P_TI_GENERAL, P_TI_FIXED], label: 매입 세금계산서}
+  - {pdf: [purchase.card, purchase.cash_receipt, purchase.card_cash], card_receipt_summary: true, label: 매입 신용카드·현금영수증}
+  - {pdf: [purchase.non_deductible], lines: [P_NON_DEDUCTIBLE], label: 매입 불공제}
+  - {pdf: [payable], lines: [PAYABLE], fields: [tax], label: 납부(환급)세액}
+  - {pdf: [final], lines: [FINAL], fields: [tax], label: 차가감 납부할 세액}
+tolerance: 0          # 허용 차이(원)

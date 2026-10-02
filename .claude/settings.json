@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__taxauto",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_network_requests",
+      "mcp__playwright__browser_find",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_navigate_back",
+      "mcp__playwright__browser_tabs",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_hover",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_fill_form",
+      "mcp__playwright__browser_select_option",
+      "mcp__playwright__browser_press_key",
+      "mcp__playwright__browser_handle_dialog",
+      "mcp__playwright__browser_file_upload",
+      "mcp__playwright__browser_pdf_save",
+      "mcp__playwright__browser_resize",
+      "Bash(python -m taxauto.wehago.replay *)",
+      "Bash(python -m taxauto.wehago.work_order *)",
+      "Bash(python -m taxauto.wehago.upload_file *)",
+      "Bash(python -m taxauto.wehago.guard --check-text *)",
+      "Bash(python -m taxauto.wehago.guard --check-url *)",
+      "Edit(procedures/**)",
+      "Edit(recipes/**)"
+    ],
+    "deny": [
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_run_code",
+      "mcp__playwright__browser_run_code_unsafe",
+      "mcp__playwright__browser_mouse_click_xy",
+      "mcp__playwright__browser_mouse_move_xy",
+      "mcp__playwright__browser_mouse_drag_xy",
+      "mcp__playwright__browser_mouse_down",
+      "mcp__playwright__browser_mouse_up",
+      "mcp__playwright__browser_mouse_wheel",
+      "mcp__playwright__browser_drop",
+      "mcp__playwright__browser_install"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/hooks/wehago_guard.py\"",
+            "timeout": 15,
+            "statusMessage": "위하고 안전장치 확인"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -144,9 +144,12 @@ def test_wehago_ledger(inbox):
     zr = next(t for t in r.transactions if t.supply_amount == 20_000_000)
     assert zr.zero_rated and zr.direction == Direction.SALES
     card = next(t for t in r.transactions if t.doc_type == DocType.CARD)
-    assert card.direction == Direction.PURCHASE and card.tx_date == date(2026, 7, 20)
+    assert card.direction == Direction.PURCHASE and card.tx_date == date(2026, 8, 5)
     diff = [t for t in r.transactions if t.supply_amount == 5_500_000]
     assert len(diff) == 1  # 의도적 대사 차이
+    bul = next(t for t in r.transactions if "54" in t.raw.get("유형", ""))
+    assert bul.direction == Direction.PURCHASE and bul.doc_type == DocType.TAX_INVOICE
+    assert len(r.transactions) == 11
 
 
 def test_welfare_card(tmp_path):

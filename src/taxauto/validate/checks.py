@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from fractions import Fraction
 from typing import Callable
 
-from ..compute.lawutil import law_try, mul_floor, policy_get, to_fraction
+from ..compute.lawutil import law_try, mul_floor, policy_get
 from ..compute.matching import (
     card_sales_duplicate_ids,
     is_card_like_purchase,

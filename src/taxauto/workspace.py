@@ -8,6 +8,8 @@
     transactions.json    normalize : list[Transaction]  (enrich/classify 단계가 같은 파일을 갱신)
     parse_issues.json    normalize : list[ParseIssue]
     return.json          compute   : VatReturn (독립 재계산 신고서)
+    compute_issues.json  compute   : 계산 중 생긴 검토항목(validate 가 병합)
+    compute_meta.json    compute   : 계산 메타(적용 세율·한도·근거)
     wehago_return.json   normalize : 위하고 신고서 내보내기 파일이 있으면 그 값(대사용, 선택)
     review.json          validate  : list[ReviewItem]  (사람 처리결과는 재실행해도 보존)
     report/              report    : review.html, kakao.txt, wehago_upload.xlsx ...

@@ -234,6 +234,10 @@ def _column_keys(rows: list[list[Any]], idx: int) -> tuple[list[dict], list[str]
     """열별 비교키 {plain, occ, comp} 와 표시용 헤더."""
     hdr = rows[idx]
     grp = rows[idx - 1] if idx > 0 else []
+    # 윗행이 '그룹 헤더'(공급자/공급받는자 등)일 때만 사용. 제목·조회조건 한 줄은 제외
+    texts = [str(g).strip() for g in grp if g is not None and str(g).strip()]
+    if len(texts) < 2 or any(len(t) > 20 for t in texts):
+        grp = []
     width = max(len(hdr), len(grp))
     # 병합셀(그룹행) 앞값 채우기
     filled: list[str] = []
