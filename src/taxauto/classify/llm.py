@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..compute.lawutil import policy_get
+from .rules import carry_style
 from ..models import (
     Classification,
     Client,
@@ -226,7 +227,7 @@ def classify_with_llm(
             except (KeyError, ValueError, IndexError, TypeError):
                 continue
             if c.confidence >= threshold:
-                t.classification = c
+                t.classification = carry_style(t.classification, c)
                 res.applied += 1
             else:
                 if t.classification is not None:

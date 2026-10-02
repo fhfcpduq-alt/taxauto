@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>모의 위하고 (테스트 전용)</title>
+<style>
+  .hidden { display: none; }
+  section { border: 1px solid #ccc; margin: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+<!-- 테스트 전용 모의 화면. 실제 위하고 화면 구조와 무관하다. -->
+<h1>모의 위하고</h1>
+<div id="status" role="status">대기</div>
+
+<section id="login">
+  <label for="uid">아이디</label><input id="uid" name="uid">
+  <label for="upw">비밀번호</label><input id="upw" name="upw" type="password">
+  <button id="btn-login" onclick="doLogin()">로그인</button>
+</section>
+
+<section id="company" class="hidden">
+  <label for="co">회사 선택</label>
+  <select id="co">
+    <option>(주)테스트상사</option>
+    <option>샘플식당</option>
+  </select>
+  <button onclick="switchCompany()">회사 전환</button>
+  <div id="current-company"></div>
+</section>
+
+<section id="menu" class="hidden">
+  <button onclick="openLedger()">매입매출전표</button>
+  <button id="btn-submit" onclick="submitReturn()">전자신고 제출</button>
+  <button id="send" title="신고서 제출" onclick="submitReturn()">▶</button>
+  <button onclick="saveReturn()">신고서 저장</button>
+  <a id="ht" href="https://www.hometax.go.kr/">홈택스 바로가기</a>
+  <div id="save-result"></div>
+</section>
+
+<section id="ledger" class="hidden">
+  <label for="from">조회 시작일</label><input id="from" name="from">
+  <button onclick="search()">조회</button>
+  <table id="result" class="hidden">
+    <tr><th>일자</th><th>거래처</th><th>공급가액</th></tr>
+    <tr><td>2026-07-03</td><td>가나상사</td><td>100000</td></tr>
+  </table>
+  <a id="dl" class="hidden" download="ledger.csv"
+     href="data:text/csv;charset=utf-8,%EC%9D%BC%EC%9E%90,%EA%B1%B0%EB%9E%98%EC%B2%98,%EA%B3%B5%EA%B8%89%EA%B0%80%EC%95%A1%0A2026-07-03,%EA%B0%80%EB%82%98%EC%83%81%EC%82%AC,100000%0A">엑셀 다운로드</a>
+</section>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  function doLogin() {
+    if (!$('uid').value) { $('status').textContent = '아이디를 입력하세요'; return; }
+    $('login').classList.add('hidden');
+    $('company').classList.remove('hidden');
+    $('status').textContent = '로그인됨';
+  }
+  function switchCompany() {
+    $('current-company').textContent = '현재 회사: ' + $('co').value;
+    $('menu').classList.remove('hidden');
+  }
+  function openLedger() { $('ledger').classList.remove('hidden'); }
+  function search() {
+    $('result').classList.remove('hidden');
+    $('dl').classList.remove('hidden');
+    $('status').textContent = '조회 완료 (' + $('from').value + ')';
+  }
+  function submitReturn() { $('status').textContent = '제출됨'; }
+  function saveReturn() {
+    if (confirm('저장하시겠습니까?')) { $('save-result').textContent = '저장 완료'; }
+    else { $('save-result').textContent = '저장 취소'; }
+  }
+</script>
+</body>
+</html>

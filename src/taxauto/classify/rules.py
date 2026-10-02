@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from datetime import date
 from enum import Enum
 from functools import lru_cache
@@ -19,6 +20,8 @@ import yaml
 from ..compute.lawutil import law_try, policy_get
 from ..compute.matching import match_card_purchases_to_tax_invoices
 from ..law import CONFIG_DIR, Law
+from ..period import due_date as period_due_date
+from ..period import load_holidays
 from ..models import (
     Classification,
     Client,
@@ -29,10 +32,22 @@ from ..models import (
     NonDeductibleReason,
     PurchaseCategory,
     Source,
+    TaxPeriod,
     Transaction,
 )
 
 DEFAULT_RULES_PATH = CONFIG_DIR / "rules" / "purchase.yaml"
+
+# 위하고 전표 스타일 필드(스타일 학습 섹터 담당) - 판정을 바꿀 때 기존 값을 보존한다
+STYLE_FIELDS = ("account_code", "account_name", "entry_type", "settlement", "summary_text", "style_source")
+
+
+def carry_style(old: Classification | None, new: Classification) -> Classification:
+    """new 판정에 old 의 스타일 필드(비어 있지 않은 값)를 이어 붙인다."""
+    if old is None:
+        return new
+    keep = {f: getattr(old, f, "") for f in STYLE_FIELDS if getattr(old, f, "") and not getattr(new, f, "")}
+    return dc_replace(new, **keep) if keep else new
 
 
 @dataclass
@@ -52,6 +67,7 @@ class RuleContext:
     on: date
     ti_duplicate_ids: set[str] = field(default_factory=set)   # 세금계산서와 중복인 카드·현금영수증 매입 id
     missing_law_keys: set[str] = field(default_factory=set)   # 조회 실패한 law 키(경고용)
+    holidays: set[date] = field(default_factory=set)
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +103,11 @@ def build_context(
     days = int(policy_get(policy, "review.card_vs_ti_match_days", 7))
     dup = {p.receipt.id for p in match_card_purchases_to_tax_invoices(txns, days)}
     on = on or max((t.tx_date for t in txns), default=date.today())
-    return RuleContext(client=client, policy=policy, law=law, on=on, ti_duplicate_ids=dup)
+    try:
+        hol = load_holidays()
+    except Exception:  # 공휴일 파일 문제로 판정을 멈추지 않는다
+        hol = set()
+    return RuleContext(client=client, policy=policy, law=law, on=on, ti_duplicate_ids=dup, holidays=hol)
 
 
 # ---------------------------------------------------------------------------
@@ -199,12 +219,35 @@ def match_when(t: Transaction, when: dict, ctx: RuleContext) -> bool:
             m = _merchant(t)
             if not kws or not any(kw in m for kw in kws):
                 return False
+        elif k == "issued_after_deductible_window":
+            if _issued_after_window(t, ctx) != bool(v):
+                return False
         elif k == "any_of":
             if not any(match_when(t, sub or {}, ctx) for sub in v):
                 return False
         else:
             raise ValueError(f"알 수 없는 룰 조건: {k}")
     return True
+
+
+def _issued_after_window(t: Transaction, ctx: RuleContext) -> bool:
+    """세금계산서 발급일이 '공급시기 과세기간 확정신고기한 다음 날부터 1년'을 넘겼는가(→ 매입세액 불공제).
+
+    법 파라미터(신고기한)를 못 읽으면 판정하지 않는다(False).
+    """
+    if t.issue_date is None or ctx.law is None:
+        return False
+    half = 1 if t.tx_date.month <= 6 else 2
+    try:
+        due = period_due_date(TaxPeriod(t.tx_date.year, half, "F"), ctx.law, ctx.holidays)
+    except Exception:
+        ctx.missing_law_keys.add(f"deadline.{half}F")
+        return False
+    try:
+        limit = due.replace(year=due.year + 1)
+    except ValueError:  # 2/29
+        limit = due.replace(year=due.year + 1, day=28)
+    return t.issue_date > limit
 
 
 # ---------------------------------------------------------------------------

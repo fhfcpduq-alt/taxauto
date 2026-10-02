@@ -14,7 +14,12 @@ from ..law import Law
 from ..models import Classification, Client, DecidedBy, Direction, Source, Transaction
 from .llm import classify_with_llm
 from .memory import Memory
-from .rules import RuleContext, build_context, classify_by_rules, load_rules
+from .rules import RuleContext, build_context, carry_style, classify_by_rules, load_rules
+
+try:  # 위하고 전표 스타일(계정과목·유형·적요) - 스타일 학습 섹터 담당
+    from .account import apply_style
+except ImportError:  # pragma: no cover - 모듈이 아직 없을 때
+    apply_style = None
 
 
 def classify_transactions(
@@ -44,7 +49,7 @@ def classify_transactions(
                 continue
             c = classify_by_rules(t, rules, ctx, phase="post")
         if c is not None:
-            t.classification = c
+            t.classification = carry_style(t.classification, c)
     return ctx
 
 
@@ -57,6 +62,11 @@ def run(ctx: RunContext) -> StageResult:
     llm_res = classify_with_llm(txns, ctx.client, ctx.policy)
     if llm_res.skipped_reason:
         ctx.log.info("AI 분류: %s", llm_res.skipped_reason)
+    if apply_style is not None:
+        try:
+            apply_style(txns, ctx)
+        except Exception as e:  # 스타일 실패가 공제판정을 막지 않게
+            ctx.log.warning("전표 스타일 적용 실패(건너뜀): %s: %s", type(e).__name__, e)
     if not ctx.dry_run:
         ctx.workspace.save_transactions(txns)
     purchases = [t for t in txns if t.direction == Direction.PURCHASE and t.classification]

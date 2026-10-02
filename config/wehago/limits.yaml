@@ -1,0 +1,24 @@
+# 위하고 조작 에이전트 운영 상한 (사무실 기준 — 자유롭게 조정)
+# 레시피 재생기(taxauto.wehago.replay)와 스킬(wehago-operator / wehago-vat-night)이 읽는다.
+
+version: 1
+
+cdp_endpoint: "http://127.0.0.1:9222"     # scripts/start_browser.ps1 로 띄운 전용 크롬
+
+per_client_minutes: 20          # 거래처 1곳 상한(재생 + 에이전트 이어받기 합계). 넘으면 중단·검토항목
+max_clients_per_run: 15         # 1회 야간 실행에서 위하고 조작할 최대 거래처 수(처음엔 작게 시작)
+max_agent_takeovers_per_client: 3   # 재생 실패 후 에이전트가 이어받는 횟수 상한(같은 거래처)
+run_window:                     # 이 시간대에만 위하고 조작(현지 시각, HH:MM). 사람이 쓰는 시간과 겹치지 않게
+  start: "01:00"
+  end: "06:30"
+
+replay:
+  step_timeout_ms: 15000        # 단계당 기본 대기
+  step_retries: 1               # 단계 실패 시 재시도 횟수(안전장치 차단은 재시도 안 함)
+  step_screenshots: true        # 단계마다 스크린샷(용량 부담되면 false)
+  recipe_retries: 1             # 레시피 전체 재시도(연결 끊김 등)
+
+agent:
+  allow_voucher_delete: false   # 중복 전표 삭제: false 면 '삭제 후보'로만 표시하고 사람이 삭제
+  max_corrections_per_client: 50  # 작업지시서 전표 수정이 이보다 많으면 에이전트 직접 수정 대신 사람 확인
+  stop_on_reconcile_mismatch: true  # 위하고 신고서 ≠ 엔진 재계산이면 그 거래처 중단

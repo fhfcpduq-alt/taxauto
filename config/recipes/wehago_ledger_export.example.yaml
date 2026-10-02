@@ -1,0 +1,33 @@
+# 예시 레시피(placeholder) — 위하고 매입매출전표 엑셀 내려받기
+# 실제 셀렉터는 모른다. 아래 SELECTOR_* 를 'playwright codegen' 녹화 결과로 바꿔야 동작한다.
+#
+# 녹화:
+#   pip install playwright && playwright install chromium
+#   playwright codegen https://www.wehago.com --target python -o rec.py
+#   (로그인 → 회사 선택 → 회계 > 매입매출전표 → 기간 입력 → 엑셀 다운로드 까지 직접 클릭)
+#   rec.py 의 동작을 아래 steps 로 옮기고, 이 파일을 '.example' 없는 이름으로 저장한다.
+#     page.goto(url)                         →  - goto: url
+#     page.get_by_placeholder("아이디").fill  →  - fill: {selector: "placeholder=아이디", value: "${env:WEHAGO_ID}"}
+#     page.get_by_role("button", name="로그인").click() → - click: 'role=button[name="로그인"]'
+#     with page.expect_download(): ...click() → - download: {click: ..., save_as: ...}
+#
+# 비밀번호는 절대 이 파일에 쓰지 않는다. secret: 이름 → 환경변수 또는 OS 키체인(서비스 taxauto).
+# 2단계 인증·보안프로그램·인증서 창이 뜨면 자동화하지 말고 사람이 처리(headless: false 로 지켜보며 실행).
+# 실행: taxauto.ingest.browser.run_recipes_for(client, filing, Path("config/recipes"), Path("inbox"))
+
+name: wehago_ledger_export
+description: 위하고 매입매출전표 목록 엑셀 → inbox/{period}/{client_id}/
+headless: false
+timeout_ms: 30000
+start_url: "https://www.wehago.com/"
+steps:
+  - fill: {selector: "SELECTOR_LOGIN_ID", value: "${env:WEHAGO_ID}"}
+  - fill: {selector: "SELECTOR_LOGIN_PW", secret: WEHAGO_PW}
+  - click: "SELECTOR_LOGIN_BUTTON"
+  - wait: {selector: "SELECTOR_AFTER_LOGIN", timeout: 60000}
+  - goto: "URL_OF_COMPANY_{client_id}_LEDGER_PAGE"
+  - fill: {selector: "SELECTOR_DATE_FROM", value: "{start_ymd}"}
+  - fill: {selector: "SELECTOR_DATE_TO", value: "{end_ymd}"}
+  - click: "SELECTOR_SEARCH"
+  - wait: {ms: 2000}
+  - download: {click: "SELECTOR_EXCEL_BUTTON", save_as: "{client_id}_위하고_매입매출전표_{period}.xlsx"}

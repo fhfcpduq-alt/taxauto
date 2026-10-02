@@ -1,0 +1,175 @@
+# 위하고 조작 안전장치 설정 (taxauto.wehago.guard 가 읽는다)
+#
+# 적용 위치 3곳이 모두 이 파일을 쓴다.
+#   1) Claude Code PreToolUse 훅  scripts/hooks/wehago_guard.py   (에이전트의 Playwright MCP 호출 검사)
+#   2) 레시피 재생기             taxauto.wehago.replay            (레시피 사전검사 + 실제 화면 요소 글자 검사)
+#   3) 페이지 주입 스크립트       scripts/wehago_guard_init.js     (브라우저 안에서 금지 버튼 클릭 자체를 막음)
+#      → 이 파일을 고치면 반드시 재생성:  python -m taxauto.wehago.guard --write-init-script
+#
+# 글자 비교 규칙: 공백 제거 + 소문자화 후 '부분 문자열' 비교.
+#   예) "전자신고 제출" 은 "제출" 에 걸린다.
+# 이 검사는 '설명 텍스트' 기반이라 완벽하지 않다. docs/WEHAGO_AGENT.md '다층 방어' 참고.
+# 에이전트는 이 파일을 수정할 수 없다(야간 실행 설정에서 Edit 거부). 사람만 고친다.
+
+version: 1
+
+# 클릭·입력 대상 설명/실제 글자에 이 단어가 있으면 차단
+forbidden_text:
+  # --- 신고·제출 (최우선) ---
+  - 제출              # 전자신고 제출, 신고서 제출, 일괄제출, 최종제출 ...
+  - 신고하기
+  - 신고서전송
+  - 국세청전송
+  - 전송              # 전자세금계산서 국세청 전송 등. 오탐이 나면 allow_exceptions 로 예외 처리
+  - 발행              # 세금계산서·계산서 발행(거래처에 실제 효력)
+  - 발급
+  - 신고취소
+  - 접수
+  # --- 삭제·초기화 ---
+  - 일괄삭제
+  - 전체삭제
+  - 회사삭제
+  - 거래처삭제
+  - 데이터삭제
+  - 초기화
+  - 마감취소
+  - 마감해제
+  - 마감        # 마감 자체도 사람 영역
+  # --- 계정·보안 ---
+  - 비밀번호
+  - 인증서
+  - 회원탈퇴
+  - 탈퇴
+  - 해지
+  - 권한설정
+  - 권한변경
+  - 사용자관리
+  - 직원초대
+  # --- 돈·외부 발송 ---
+  - 결제
+  - 구매
+  - 충전
+  - 납부하기
+  - 전자납부
+  - 카드납부
+  - 이체
+  - 발송
+  - 문자보내기
+  - 메일보내기
+  - submit
+  - password
+  - delete all
+
+# 금지어가 이 문구 '안에' 들어 있을 때만 예외(허용). 학습모드에서 사람이 확인한 뒤 추가한다.
+# 예) "전송내역조회" 가 단순 조회 메뉴라는 것을 확인했다면 여기에 추가.
+allow_exceptions: []
+#  - 전송내역조회   # (예시, 미확인)
+
+# 이 글자가 들어간 입력칸에는 어떤 값도 타이핑하지 않는다(로그인 정보는 브라우저 세션 유지로만)
+forbidden_input_targets:
+  - 비밀번호
+  - 패스워드
+  - password
+  - 인증서
+  - pin
+  - otp
+  - 보안카드
+  - 주민등록번호
+
+# 탐색 허용 호스트(허용 목록 방식). 하위 도메인 포함 표기: "*.wehago.com"
+allowed_hosts:
+  - wehago.com
+  - "*.wehago.com"
+  - about:blank
+
+# 허용 목록보다 우선하는 차단 호스트(하위 도메인 포함). 홈택스는 전체 차단이 기본.
+blocked_hosts:
+  - hometax.go.kr
+  - "*.hometax.go.kr"
+  - nts.go.kr
+  - "*.nts.go.kr"
+  - "*.wetax.go.kr"
+  - wetax.go.kr
+
+# URL 경로에 이 글자가 있으면(허용 호스트라도) 차단. 실제 위하고 URL 은 학습모드에서 확인 후 보강.
+blocked_url_keywords:
+  - submit
+  - logout
+
+allowed_schemes: [https, about]
+
+# 업로드 허용: 저장소 기준 상대경로 루트 + 확장자
+upload_roots: [data]
+upload_extensions: [.xlsx, .xls, .csv]
+
+# Playwright MCP 도구 분류 (허용 목록 방식: 여기 없는 playwright 도구는 차단 = 이름이 바뀐 새 도구도 차단)
+tools:
+  # 화면 읽기 등 부작용 없는 도구
+  readonly:
+    - browser_snapshot
+    - browser_take_screenshot
+    - browser_wait_for
+    - browser_console_messages
+    - browser_network_requests
+    - browser_find
+    - browser_navigate_back
+    - browser_resize
+    - browser_close
+    - browser_pdf_save
+    - browser_highlight
+    - browser_hide_highlight
+    - browser_hover
+  # 대상 설명(element)·selector(target)·값을 금지어 검사
+  text_checked:
+    browser_click: [element, target]
+    browser_type: [element, target, text]
+    browser_select_option: [element, target, values]
+    browser_fill_form: [fields]
+    browser_drag: [startElement, startTarget, endElement, endTarget]
+    browser_handle_dialog: [promptText]
+    browser_press_key: [key]
+  # URL 검사
+  url_checked:
+    browser_navigate: url
+    browser_tabs: url
+  # 파일 경로 검사
+  path_checked:
+    browser_file_upload: paths
+  # 항상 차단 (임의 JS 실행·좌표 클릭·녹화 등)
+  always_block:
+    - browser_evaluate
+    - browser_run_code
+    - browser_run_code_unsafe
+    - browser_mouse_click_xy
+    - browser_mouse_move_xy
+    - browser_mouse_drag_xy
+    - browser_mouse_down
+    - browser_mouse_up
+    - browser_mouse_wheel
+    - browser_drop
+    - browser_install
+    - browser_resume
+    - browser_annotate
+
+# browser_press_key 로 누르면 안 되는 키 (더존 계열 그리드에서 행 삭제 단축키로 쓰일 수 있음 - 추정)
+blocked_keys:
+  - Delete
+  - F5
+  - Shift+Delete
+  - Control+Delete
+  - Control+D
+
+# 클릭할 때 element 설명이 이보다 짧으면 차단(무엇을 누르는지 설명 없이 ref 만으로 누르는 것 방지)
+min_click_description_chars: 2
+
+# Bash 명령 검사: 이 글자가 있으면 차단 (에이전트가 Playwright MCP·재생기를 우회해 브라우저를 직접 조종하는 것 방지)
+bash_forbidden:
+  - "9222"
+  - connect_over_cdp
+  - remote-debugging
+  - hometax
+  - chrome-remote-interface
+# 위 금지어가 있어도 이 접두어로 시작하면 허용(재생기는 자체 가드를 거친다)
+bash_allowed_prefixes:
+  - python -m taxauto.wehago.
+  - py -m taxauto.wehago.

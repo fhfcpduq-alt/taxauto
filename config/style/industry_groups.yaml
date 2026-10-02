@@ -1,0 +1,49 @@
+# 업종그룹 판정 (taxauto.learn.features.industry_group)
+# 1) 업종코드(국세청 6자리 업종코드) 앞자리 → 2) 업태·종목 키워드 → 3) other
+# 업종코드 앞자리 구간은 '추정'(기준경비율 업종코드 체계 기억값). 실제 거래처 코드로 확인 후 조정.
+# 위에서부터 첫 매칭. 키워드는 공백 제거 후 포함 여부.
+
+version: 1
+
+groups:
+  restaurant:
+    label: 음식점·숙박
+    code_prefixes: ["55"]
+    keywords: [음식, 한식, 중식, 일식, 양식, 분식, 식당, 카페, 커피, 주점, 호프, 치킨, 피자, 제과, 베이커리, 숙박, 모텔, 펜션, 뷔페]
+  medical:
+    label: 보건·의료
+    code_prefixes: ["85"]
+    keywords: [의원, 병원, 치과, 한의원, 약국, 의료, 보건, 요양]
+  construction:
+    label: 건설
+    code_prefixes: ["45"]
+    keywords: [건설, 건축, 공사, 토목, 인테리어, 시공, 전기공사, 설비]
+  manufacturing:
+    label: 제조
+    code_prefixes: ["15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37"]
+    keywords: [제조, 가공, 생산, 공장]
+  wholesale:
+    label: 도매
+    code_prefixes: ["51"]
+    keywords: [도매, 무역, 유통, 수입판매]
+  retail:
+    label: 소매
+    code_prefixes: ["52"]
+    keywords: [소매, 편의점, 슈퍼, 마트, 판매점, 쇼핑몰, 전자상거래, 통신판매]
+  transport:
+    label: 운수·물류
+    code_prefixes: ["60", "61", "62", "63"]
+    keywords: [운수, 운송, 화물, 택배, 물류, 퀵서비스, 용달, 택시]
+  realestate:
+    label: 부동산·임대
+    code_prefixes: ["70"]
+    keywords: [부동산, 임대, 중개]
+  it:
+    label: 정보통신
+    code_prefixes: ["64", "72"]
+    keywords: [소프트웨어, 정보, 컴퓨터, 프로그래밍, 시스템통합, 앱개발, 웹, 데이터, 통신]
+  service:
+    label: 서비스
+    code_prefixes: ["74", "75", "80", "88", "90", "91", "92", "93"]
+    keywords: [서비스, 컨설팅, 광고, 디자인, 교육, 학원, 미용, 세탁, 수리, 대행]
+default: other

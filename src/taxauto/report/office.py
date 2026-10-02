@@ -1,6 +1,6 @@
 """회차 단위 사무실 리포트: _dashboard.html, _briefing.md.
 
-입력은 data/{period}/_summary.json 하나(스키마: docs/SUMMARY_SCHEMA.md).
+입력은 data/{period}/_summary.json 하나(스키마: docs/RUNBOOK.md 부록).
 수치는 요약 파일 값만 쓰고, 여기서 새로 계산하지 않는다(합계·건수 집계만).
 """
 
@@ -71,7 +71,7 @@ DASH_CSS = """
 .tile{border:1px solid var(--line);border-radius:6px;padding:10px 12px}
 .tile .k{font-size:11px;color:var(--muted)}.tile .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
 .tile.red .v{color:var(--red)}.tile.green .v{color:var(--green)}
-.wrap{overflow-x:auto}
+.wrap{overflow-x:auto;margin-top:14px}
 td.n0{color:#b8bec6}
 td.blk{color:var(--red);font-weight:700}td.wrn{color:var(--amber);font-weight:700}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
@@ -225,6 +225,8 @@ def _advice(rows: list[dict], t: dict, period: str) -> list[str]:
         out.append(f"자료 단계(collect/normalize) 실패 {len(data_fail)}곳 — inbox/{period}/ 에 자료가 빠졌거나 파일 형식이 바뀐 경우가 많습니다.")
     if t.get("not_implemented"):
         out.append(f"미구현 단계 때문에 끝까지 못 간 곳 {t['not_implemented']}곳 — 엔진 업데이트 전까지 해당 단계는 수작업.")
+    if t.get("with_blockers") and not urgent:
+        out.append(f"차단이 남은 {t['with_blockers']}곳은 아직 신고 불가 — 차단 항목부터 처리.")
     unv = sum(1 for r in rows if r.get("unverified_law_params"))
     if unv:
         out.append(f"미검증 세법 파라미터를 쓴 거래처 {unv}곳 — config/law 값 확인 후 verified 처리 필요.")

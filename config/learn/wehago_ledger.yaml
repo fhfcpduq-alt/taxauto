@@ -1,0 +1,135 @@
+# 위하고 매입매출전표 내보내기 엑셀 — 스타일 학습 섹터(taxauto.learn.ledger_import)가 읽는다.
+#
+# ※ 실제 위하고 내보내기 헤더는 아직 미확인(샘플 대기). 아래 별칭·코드표는 더존(SmartA) 계열 기억값 기반 '추정'.
+#    샘플이 오면 코드 수정 없이 이 파일 별칭만 고친다.
+# 헤더 비교 규칙은 config/columns.yaml 과 같다(taxauto.ingest.excel.norm_header: 공백·괄호내용 제거 후 완전일치, "이름@n" = n번째 같은 이름 열).
+# 한 열에 "51.과세" / "830 소모품비" 처럼 코드와 이름이 같이 있으면 자동 분리한다.
+
+version: 1
+
+detect:
+  min_fields: 4                       # 헤더행으로 인정할 최소 매핑 필드 수
+  required_any: [entry_type, entry_code, entry_name]   # 유형 열이 하나는 있어야 전표로 본다
+  required_amount_any: [supply_amount, total]
+
+fields:
+  tx_date: [일자, 전표일자, 거래일자, 작성일자, 날짜, 년월일]
+  month: [월]
+  day: [일]
+  entry_code: [유형코드, 부가세유형코드, 매입매출유형코드]
+  entry_name: [유형명, 부가세유형명, 매입매출유형명]
+  entry_type: [유형, 부가세유형, 매입매출유형, 과세유형, 전표유형, 구분유형]
+  direction_text: [매입매출구분, 매출매입구분, 매입매출, 구분]
+  item: [품목, 품명, 품목명]
+  quantity: [수량]
+  supply_amount: [공급가액, 공급가]
+  vat: [부가세, 세액, 부가가치세]
+  total: [합계, 합계금액, 공급대가]
+  counterparty_code: [거래처코드, 코드@1]
+  counterparty_name: [거래처명, 거래처, 상호, 거래처상호]
+  counterparty_biz_no: [사업자번호, 사업자등록번호, 거래처사업자번호, 등록번호, 사업자/주민번호, 사업자주민번호]
+  electronic: [전자, 전자여부, 전자세금계산서, 전자구분]
+  settlement: [분개유형, 분개, 분개구분, 결제구분, 결제유형]
+  account_code: [계정코드, 계정과목코드, 코드@2]
+  account_name: [계정과목명, 계정명]
+  account: [계정과목, 계정]
+  summary: [적요, 적요명, 적요내용]
+  nd_reason: [불공제사유, 불공사유, 불공제구분, 불공제]
+  card_company: [카드사, 카드사명, 신용카드사]
+  card_no: [카드번호, 신용카드번호]
+  deemed: [의제매입, 의제구분, 의제류, 의제매입구분]
+  fixed_asset: [고정자산, 고정자산구분, 자산구분, 고정자산여부]
+  approval_no: [승인번호, 전자세금계산서승인번호, 국세청승인번호]
+  memo: [비고]
+
+# 매입매출 유형코드(더존 계열, 추정). name 은 위하고 화면 표기(entry_type 값으로 그대로 씀)
+entry_types:
+  "11": {name: 과세, direction: 매출, doc_type: 세금계산서}
+  "12": {name: 영세, direction: 매출, doc_type: 세금계산서, zero_rated: true}
+  "13": {name: 면세, direction: 매출, doc_type: 계산서}
+  "14": {name: 건별, direction: 매출, doc_type: 증빙없음}
+  "15": {name: 간이, direction: 매출, doc_type: 증빙없음}
+  "16": {name: 수출, direction: 매출, doc_type: 증빙없음, zero_rated: true}
+  "17": {name: 카과, direction: 매출, doc_type: 신용카드}
+  "18": {name: 카면, direction: 매출, doc_type: 신용카드}
+  "19": {name: 카영, direction: 매출, doc_type: 신용카드, zero_rated: true}
+  "20": {name: 면건, direction: 매출, doc_type: 증빙없음}
+  "22": {name: 현과, direction: 매출, doc_type: 현금영수증}
+  "23": {name: 현면, direction: 매출, doc_type: 현금영수증}
+  "24": {name: 현영, direction: 매출, doc_type: 현금영수증, zero_rated: true}
+  "51": {name: 과세, direction: 매입, doc_type: 세금계산서}
+  "52": {name: 영세, direction: 매입, doc_type: 세금계산서, zero_rated: true}
+  "53": {name: 면세, direction: 매입, doc_type: 계산서}
+  "54": {name: 불공, direction: 매입, doc_type: 세금계산서, non_deductible: true}
+  "55": {name: 수입, direction: 매입, doc_type: 세금계산서}
+  "57": {name: 카과, direction: 매입, doc_type: 신용카드}
+  "58": {name: 카면, direction: 매입, doc_type: 신용카드}
+  "59": {name: 카영, direction: 매입, doc_type: 신용카드, zero_rated: true}
+  "60": {name: 면건, direction: 매입, doc_type: 증빙없음}
+  "61": {name: 현과, direction: 매입, doc_type: 현금영수증}
+  "62": {name: 현면, direction: 매입, doc_type: 현금영수증}
+
+# 이름만 있을 때 이름 → 표준이름(별칭). 방향이 이름만으로 정해지지 않으면(과세·면세 등) 구분열/계정코드로 정한다.
+entry_name_aliases:
+  과세: [과세, 과세매출, 과세매입]
+  영세: [영세, 영세율]
+  면세: [면세, 계산서]
+  건별: [건별, 무증빙]
+  카과: [카과, 카드과세, 신용카드과세]
+  카면: [카면, 카드면세, 신용카드면세]
+  카영: [카영, 카드영세]
+  현과: [현과, 현금과세, 현금영수증과세]
+  현면: [현면, 현금면세, 현금영수증면세]
+  불공: [불공, 불공제]
+  수입: [수입]
+  면건: [면건]
+  간이: [간이]
+  수출: [수출]
+  현영: [현영]
+# 이름만으로 방향이 확정되는 유형
+purchase_only_names: [불공, 수입]
+
+# 분개유형(추정: 0 분개없음 1 현금 2 외상 3 혼합 4 카드 5 추가)
+settlements:
+  "0": ""
+  "1": 현금
+  "2": 외상
+  "3": 혼합
+  "4": 카드
+  "5": 추가
+settlement_aliases:
+  현금: [현금, 현금분개]
+  외상: [외상, 외상분개, 미지급, 미수]
+  카드: [카드, 카드분개, 신용카드]
+  혼합: [혼합, 혼합분개]
+  추가: [추가]
+
+# 불공제사유 코드(추정, 부가가치세법 제39조 순서) → NonDeductibleReason 값
+nd_reasons:
+  "1": 필요적기재사항누락
+  "2": 사업과직접관련없는지출
+  "3": 비영업용소형승용자동차
+  "4": 접대비및이와유사한비용
+  "5": 면세사업등관련
+  "6": 토지의자본적지출관련
+  "7": 사업자등록전매입세액
+  "8": 기타
+# 사유 문구 키워드 → NonDeductibleReason 값 (코드가 없을 때)
+nd_reason_keywords:
+  필요적기재사항누락: [기재사항, 필요적]
+  사업과직접관련없는지출: [사업과직접, 직접관련없, 업무무관]
+  비영업용소형승용자동차: [승용, 소형승용, 비영업용]
+  접대비및이와유사한비용: [접대, 기업업무추진]
+  면세사업등관련: [면세사업]
+  토지의자본적지출관련: [토지]
+  사업자등록전매입세액: [등록전]
+  공통매입세액면세사업분: [공통매입]
+
+# 계정코드로 방향 추정(유형명만 있고 구분열이 없을 때). 4xx = 매출계정(추정)
+sales_account_prefixes: ["4"]
+# 고정자산(유형·무형자산) 계정코드 범위(추정: 201 토지 ~ 240 무형자산)
+fixed_asset_account_range: [201, 240]
+
+truthy: [Y, y, O, o, "1", 예, 여, 전자, 대상, 해당, "TRUE", "true", 의제, 고정, 고정자산]
+falsy: [N, n, X, x, "0", 아니오, 부, 종이, 비대상, "FALSE", "false", ""]
+summary_row_markers: [합계, 총계, 소계, 누계, 월계, 계]

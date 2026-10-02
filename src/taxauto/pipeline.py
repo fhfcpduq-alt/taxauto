@@ -6,7 +6,7 @@
   그 거래처는 거기서 멈춘다(다른 거래처는 계속).
 - 한 단계가 예외/ok=False 면 그 거래처만 중단. 다른 거래처는 계속.
 - 단계별 시작/종료시각·결과·예외 traceback(마스킹) → data/{period}/{client_id}/state.json
-- 실행 후 data/{period}/_summary.json (스키마: docs/SUMMARY_SCHEMA.md) 작성
+- 실행 후 data/{period}/_summary.json (스키마: docs/RUNBOOK.md 부록) 작성
 - 동시 실행 방지: data/.lock (오래된 lock 은 자동 해제)
 
 전자신고 '제출'은 여기서 하지 않는다(사람 승인 영역).

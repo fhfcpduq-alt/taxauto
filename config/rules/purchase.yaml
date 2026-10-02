@@ -21,6 +21,7 @@
 #   client_deemed_input: 거래처에 의제매입 업종(deemed_input_type) 설정 있음
 #   zero_rated         : 영세율 표시
 #   law_keywords       : 법 파라미터 키(문자열 목록) - 가맹점명/업종에 하나라도 포함되면 매칭
+#   issued_after_deductible_window : 세금계산서 발급일 > 공급시기 과세기간 확정신고기한 + 1년(불공제)
 #   any_of             : [조건묶음, ...] 중 하나라도 만족
 # then
 #   category, non_deductible_reason, exclusion_reason (Enum 값 또는 이름), needs_review, confidence, note
@@ -29,6 +30,18 @@
 
 rules:
   # ---------------------------------------------------------------- 거래 단위 판정(메모리보다 먼저)
+  - id: ti_late_receipt_over_1y
+    before_memory: true
+    when:
+      doc_types: [세금계산서]
+      issued_after_deductible_window: true
+    then:
+      category: 불공제
+      non_deductible_reason: 기타
+      needs_review: true
+      confidence: 0.8
+      note: "공급시기 과세기간 확정신고기한 다음 날부터 1년이 지나 발급된 세금계산서 - 매입세액 불공제(부가법 시행령 제75조)"
+
   - id: ti_closed_seller
     before_memory: true
     when:
@@ -116,7 +129,7 @@ rules:
       category: 신고제외
       exclusion_reason: 간이과세자(영수증)가맹점
       confidence: 0.95
-      note: "영수증 발급 간이과세자 가맹점 - 매입세액공제 불가"
+      note: "영수증 발급 간이과세자 가맹점 - 매입세액공제 불가(상대방 과세유형은 조회 시점 값: 매년 7/1 유형 전환 → 거래일 당시 유형과 다를 수 있음)"
 
   - id: receipt_tax_free_seller
     when:
@@ -141,9 +154,10 @@ rules:
   - id: receipt_non_deductible_industry
     when:
       doc_types: [신용카드, 현금영수증]
+      # 법 파라미터 card_purchase.non_deductible_industries 는 설명형 문구 목록이라 키워드 매칭에 쓰지 않고
+      # 아래 정규식을 그 목록에 맞춰 관리한다(목욕·이발·미용 / 여객운송(전세버스 제외) / 입장권 / 성형 / 동물진료 / 무도·운전학원).
       any_of:
-        - law_keywords: card_purchase.non_deductible_industries
-        - text_regex: "(목욕|사우나|찜질|이발|이용원|미용|헤어|네일|피부관리|택시|고속버스|시외버스|시내버스|항공|여객|철도|코레일|KTX|SRT|지하철|입장권|극장|영화관|CGV|롯데시네마|메가박스|놀이공원|테마파크|병원|의원|치과|한의원)"
+        - text_regex: "(목욕|사우나|찜질|이발|이용원|미용|헤어|네일|피부관리|택시|고속버스|시외버스|시내버스|항공|여객|철도|코레일|KTX|SRT|지하철|입장권|극장|영화관|CGV|롯데시네마|메가박스|놀이공원|테마파크|성형외과|피부과|동물병원|무도장|무도학원|운전학원|자동차학원|병원|의원|치과|한의원)"
     then:
       category: 신고제외
       exclusion_reason: 카드공제불가업종
