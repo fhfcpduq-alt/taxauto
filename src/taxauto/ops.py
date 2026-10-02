@@ -381,21 +381,35 @@ def record_agent_step(paths: Paths, period_code: str, client_id: str, step: str,
 
 
 def get_work_order(paths: Paths, period_code: str, client_id: str) -> dict:
-    """taxauto.wehago.work_order.build_work_order 지연 import. 없으면 status=not_implemented."""
+    """taxauto.wehago.work_order 지연 import → 작업지시서 생성·저장(wehago/work_order.json). 없으면 not_implemented."""
     client = find_client(paths, client_id)
     try:
-        from .wehago.work_order import build_work_order  # type: ignore
+        from .wehago import work_order as wo_mod  # type: ignore
     except ModuleNotFoundError as e:
         if (e.name or "").startswith("taxauto.wehago"):
             return {"status": "not_implemented", "message": "taxauto.wehago.work_order 모듈 없음"}
         raise
     import inspect
 
-    ctx = make_context(client, period_code, paths=paths)
-    params = list(inspect.signature(build_work_order).parameters.values())
-    first = params[0] if params else None
-    wants_ctx = first is not None and (first.name == "ctx" or "RunContext" in str(first.annotation))
-    wo = build_work_order(ctx if wants_ctx else ctx.workspace.root)
+    build = wo_mod.build_work_order
+    params = inspect.signature(build).parameters
+    first = next(iter(params.values()), None)
+    if first is not None and (first.name == "ctx" or "RunContext" in str(first.annotation)):
+        wo = build(make_context(client, period_code, paths=paths))
+    else:
+        root = paths.workspace(period_code, client.id).root
+        if not (root / "filing.json").exists():  # 지시서가 filing.json 을 읽음
+            ctx = make_context(client, period_code, paths=paths)
+            ctx.workspace.save_json("filing.json", ctx.filing.to_dict())
+        kw = {k: v for k, v in (("client", client), ("clients_dir", paths.clients_dir)) if k in params}
+        wo = build(root, **kw)
     if hasattr(wo, "to_dict"):
         wo = wo.to_dict()
-    return {"status": "ok", "work_order": wo}
+    out: dict[str, Any] = {"status": "ok", "work_order": wo}
+    save = getattr(wo_mod, "save_work_order", None)
+    if callable(save) and isinstance(wo, dict):
+        try:
+            out["path"] = str(save(paths.workspace(period_code, client.id).root, wo))
+        except Exception as e:  # 저장 실패해도 지시서는 돌려준다
+            out["save_error"] = redact(str(e))
+    return out

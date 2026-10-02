@@ -157,6 +157,13 @@ def test_work_order_and_agent_steps(home, monkeypatch):
     monkeypatch.setitem(sys.modules, "taxauto.wehago", types.ModuleType("taxauto.wehago"))
     monkeypatch.setitem(sys.modules, "taxauto.wehago.work_order", mod)
     assert srv.get_work_order("C001", P) == {"status": "ok", "work_order": {"client": "C001", "actions": []}}
+    mod2 = types.ModuleType("taxauto.wehago.work_order")
+    mod2.build_work_order = lambda workspace_root, *, client=None, clients_dir=None: {"root": str(workspace_root), "c": client.id}
+    mod2.save_work_order = lambda root, order: root / "wehago" / "work_order.json"
+    monkeypatch.setitem(sys.modules, "taxauto.wehago.work_order", mod2)
+    r2 = srv.get_work_order("C001", P)
+    assert r2["work_order"]["c"] == "C001" and r2["work_order"]["root"].endswith("2026-2F/C001")
+    assert r2["path"].endswith("work_order.json")
 
     srv.record_agent_step("C001", P, "login", "ok")
     rec = srv.record_agent_step("C001", P, "apply_work_order", "needs_human", note="카드 1234-5678-9012-3456 확인 필요",
