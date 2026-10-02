@@ -22,3 +22,8 @@ run:
   stages: [collect, normalize, enrich, classify, compute, validate, report]
   workspace: "data"                   # data/{period}/{client_id}/
   inbox: "inbox"                      # inbox/{period}/{client_id}/*.xlsx  (홈택스·위하고 내려받은 파일)
+  lock_stale_hours: 6                 # data/.lock 이 이 시간보다 오래되면 죽은 실행으로 보고 자동 해제
+  briefing_top_n: 5                   # 아침 브리핑 '사람이 볼 것' 개수
+
+office:
+  name: "세무회계 민"                  # 거래처 안내문(kakao.txt) 서명

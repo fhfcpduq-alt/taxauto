@@ -33,6 +33,7 @@ class FilingSettings:
     skip: bool = False                     # 이번 회차 자동처리 제외(직접 처리 거래처 등)
     adjustments: list[Adjustment] = field(default_factory=list)
     previous_period_sales: int | None = None   # 전기 과세표준(변동률 검증용, 없으면 workspace에서 찾음)
+    card_credit_used_this_year: int = 0        # 같은 해 앞 회차에서 이미 받은 신용카드발행공제액(연 한도 계산용)
 
 
 def load_clients(clients_dir: Path) -> list[Client]:
@@ -59,4 +60,5 @@ def load_filing_settings(clients_dir: Path, client_id: str, period_code: str) ->
         skip=bool(d.get("skip", False)),
         adjustments=adj,
         previous_period_sales=d.get("previous_period_sales"),
+        card_credit_used_this_year=int(d.get("card_credit_used_this_year") or 0),
     )
