@@ -78,30 +78,37 @@ def load_client_answers(client_dir: Path) -> dict[str, Question]:
 # ---------------------------------------------------------------------------
 
 
-def pack_path(config_dir: Path, group: str) -> Path:
-    return Path(config_dir) / "style" / "industry" / f"{group}.yaml"
+def default_packs_dir(config_dir: Path | None = None) -> Path:
+    from ..law import CONFIG_DIR
+
+    return Path(config_dir or CONFIG_DIR) / "style" / "industry"
 
 
-def save_pack(config_dir: Path, group: str, rules: list[Rule], meta: dict | None = None) -> Path:
-    p = pack_path(config_dir, group)
+def pack_path(packs_dir: Path, group: str) -> Path:
+    return Path(packs_dir) / f"{group}.yaml"
+
+
+def save_pack(packs_dir: Path, group: str, rules: list[Rule], meta: dict | None = None) -> Path:
+    p = pack_path(packs_dir, group)
     obj = {"version": 1, "group": group, "built_at": _now(), **(meta or {}), "rules": [r.to_dict() for r in rules]}
     _dump_yaml(p, obj, "# 업종 공용 전표 스타일 - 2개 이상 거래처 공통 규칙만(개인이름형 상호 제외). 학습 시 자동 생성.")
     return p
 
 
-def load_pack(config_dir: Path, group: str) -> list[Rule]:
-    d = _load_yaml(pack_path(config_dir, group))
+def load_pack(packs_dir: Path, group: str) -> list[Rule]:
+    d = _load_yaml(pack_path(packs_dir, group))
     return [Rule.from_dict(r, group if group != ALL_PACK else "*") for r in d.get("rules") or []]
 
 
-def load_model(client_id: str, group: str, client_dir: Path | None, config_dir: Path, cfg: dict | None = None) -> StyleModel:
+def load_model(client_id: str, group: str, client_dir: Path | None, packs_dir: Path, cfg: dict | None = None) -> StyleModel:
+    """거래처 style.yaml → 업종팩 → 전체팩 순 우선순위 모델."""
     rules: list[tuple[Rule, str]] = []
     if client_dir is not None:
         _, rs = load_client_style(client_dir)
         rules += [(r, f"memory:{client_id}") for r in rs]
     if group:
-        rules += [(r, f"industry:{group}") for r in load_pack(config_dir, group)]
-    rules += [(r, f"industry:{ALL_PACK}") for r in load_pack(config_dir, ALL_PACK)]
+        rules += [(r, f"industry:{group}") for r in load_pack(packs_dir, group)]
+    rules += [(r, f"industry:{ALL_PACK}") for r in load_pack(packs_dir, ALL_PACK)]
     return StyleModel(rules, cfg)
 
 

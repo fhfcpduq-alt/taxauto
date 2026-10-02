@@ -35,6 +35,7 @@
 #   card_no card_company merchant_category merchant_tax_type deductible
 #   tx_type(승인/취소) purpose(소득공제/지출증빙) tax_free_flag(면세표시)
 #   vat_type(위하고 유형) direction_text(매출/매입) zero_rated_text amended_text doc_kind_text
+#   ti_issued_flag(카드·현금영수증·판매대행 건에 '세금계산서 발급(수취)분' 표시 → raw.tax_invoice_duplicate)
 
 version: 1
 
@@ -77,6 +78,7 @@ _common:
     merchant_category: [업종, 가맹점업종, 업종명, 가맹점업종명, 업태, 종목]
     deductible: [공제여부결정, 공제여부, 공제구분, 매입세액공제여부, 공제/불공제]
     tx_type: [거래구분, 승인구분, 취소여부, 매출구분]
+    ti_issued_flag: [세금계산서수취여부, 세금계산서발급여부, 세금계산서수취, 세금계산서발급분, 세금계산서교부여부]
     memo: [비고]
 
 kinds:
@@ -169,6 +171,7 @@ kinds:
       service_charge: [봉사료]
       tax_free_flag: [면세여부, 과세구분, 과세유형]
       tx_type: [거래구분, 승인구분, 취소여부]
+      ti_issued_flag: [세금계산서발급여부, 세금계산서발급, 세금계산서발급분, 세금계산서발행여부, 세금계산서교부여부]
       memo: [비고]
 
   # -------------------------------------------------------------------------
@@ -199,6 +202,7 @@ kinds:
       tx_type: [거래구분, 승인구분, 취소여부]
       purpose: [용도구분, 용도, 발급용도, 소득공제/지출증빙]
       tax_free_flag: [면세여부, 과세구분]
+      ti_issued_flag: [세금계산서발급여부, 세금계산서발급, 세금계산서발급분, 세금계산서발행여부, 세금계산서교부여부]
       memo: [비고]
 
   cash_receipt_purchase:
@@ -225,6 +229,7 @@ kinds:
       merchant_category: [업종, 업종명, 가맹점업종]
       deductible: [공제여부, 공제여부결정, 매입세액공제여부]
       tx_type: [거래구분, 승인구분, 취소여부]
+      ti_issued_flag: [세금계산서수취여부, 세금계산서발급여부, 세금계산서수취, 세금계산서교부여부]
       memo: [비고]
 
   # -------------------------------------------------------------------------
@@ -286,6 +291,7 @@ kinds:
       vat: [부가세, 세액]
       tax_free_flag: [면세여부, 과세구분]
       tx_type: [거래구분, 취소여부]
+      ti_issued_flag: [세금계산서발급여부, 세금계산서발급, 세금계산서발급분, 세금계산서발행여부]
       memo: [비고]
 
   # -------------------------------------------------------------------------
@@ -385,6 +391,12 @@ values:
   deductible_true: [공제, Y, y, O, o, 예, 대상, "공제대상"]
   deductible_false: [불공제, N, n, X, x, 아니오, 제외, 불공제대상, 공제제외]
   summary_row_markers: [합계, 총계, 소계, 누계, 계]   # 첫 몇 칸에 이 문구만 있으면 합계행으로 보고 건너뜀
+  # 매입자발행 세금계산서(분류·종류·발급유형 칸) → raw.buyer_issued=True
+  buyer_issued_markers: [매입자발행]
+  # 카드·현금영수증·판매대행 건의 '세금계산서 발급(수취)분' 표시 → raw.tax_invoice_duplicate=True
+  #  - ti_issued_flag 칸이 아래 true 값이거나, 비고·공제여부·거래구분 등에 아래 문구가 있으면
+  ti_duplicate_true: [Y, O, 예, 여, 발급, 발행, 수취, 교부, 대상, 세금계산서발급, 세금계산서발급분]
+  ti_duplicate_markers: [세금계산서발급, 세금계산서발행, 세금계산서수취, 세금계산서교부, 세금계산서중복]
   direction_sales: [매출]
   direction_purchase: [매입]
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import cached_property
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,9 @@ from .excel import HeaderMatch, Sheet
 
 COLUMNS_FILE = "columns.yaml"
 WEHAGO_RETURN_FILE = "wehago_return.json"
+# raw 에 남기는 표시 키(계산 섹터와의 약속: compute/vat_return.py RAW_BUYER_ISSUED_KEY, compute/matching.py RAW_TI_DUPLICATE_KEY)
+RAW_BUYER_ISSUED = "buyer_issued"
+RAW_TI_DUPLICATE = "tax_invoice_duplicate"
 
 # ---------------------------------------------------------------------------
 # 설정
@@ -77,13 +81,17 @@ class ColumnsConfig:
     values: dict
     wehago_return: dict
 
-    def known_headers(self) -> set[str]:
+    @cached_property
+    def known_header_set(self) -> frozenset[str]:
         out: set[str] = set()
         for k in self.kinds.values():
             for aliases in k.fields.values():
                 out.update(excel._parse_alias(str(a))[0] for a in aliases)
         out.discard("")
-        return out
+        return frozenset(out)
+
+    def known_headers(self) -> frozenset[str]:
+        return self.known_header_set
 
     def marker(self, name: str) -> list[str]:
         return [str(x) for x in self.values.get(name) or []]
@@ -402,6 +410,14 @@ def _parse_sheet(
                 memo.append(f"용도 {txt('purpose')}")
 
             raw = _raw_dict(row, hm.headers, card_col, cp_cols)
+            # 계산 섹터용 표시(compute/vat_return.py, compute/matching.py 가 읽음)
+            type_text = " ".join((txt("classification"), txt("invoice_type"), txt("issue_type"), txt("doc_kind_text")))
+            if _contains_any(type_text, cfg.marker("buyer_issued_markers")):
+                raw[RAW_BUYER_ISSUED] = True
+                memo.append("매입자발행")
+            if doc_type not in (DocType.TAX_INVOICE, DocType.INVOICE) and _ti_duplicate(get, txt, cols, cfg):
+                raw[RAW_TI_DUPLICATE] = True
+                memo.append("세금계산서 발급(수취)분 표시")
             t = Transaction(
                 client_id=client.id,
                 source=source,
@@ -446,6 +462,21 @@ def _parse_sheet(
                                  f"[{kind.label}] 매출/매입 확인 불가(제목·파일명에 표시 없고 사업자번호 불일치/없음) {len(unsure_rows)}건 - '{kind.direction.value if kind.direction else '?'}'로 가정",
                                  Severity.WARN))
     return txns, issues
+
+
+def _ti_duplicate(get, txt, cols: dict, cfg: ColumnsConfig) -> bool:
+    """카드·현금영수증·판매대행 건의 '세금계산서 발급(수취)분' 표시."""
+    if "ti_issued_flag" in cols:
+        v = get("ti_issued_flag")
+        if isinstance(v, bool):
+            return v
+        n = excel.norm_text(excel.cell_text(v))
+        if n and not n.startswith(("미", "불", "n", "x", "아니")) and (
+            n in {excel.norm_text(x) for x in cfg.marker("ti_duplicate_true")} or n in ("yes", "true", "1")
+        ):
+            return True
+    other = " ".join(txt(f) for f in ("memo", "deductible", "tx_type", "purpose", "issue_type"))
+    return _contains_any(other, cfg.marker("ti_duplicate_markers"))
 
 
 def _rows(rows: list[int], limit: int = 10) -> str:

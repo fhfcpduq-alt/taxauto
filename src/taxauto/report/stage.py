@@ -37,7 +37,6 @@ from .fmt import (
     dday,
     esc,
     kdate,
-    line_no,
     num,
     tax_verdict,
     won,

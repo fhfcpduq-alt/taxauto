@@ -11,8 +11,6 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
-
 from mcp.server.fastmcp import FastMCP
 
 from .. import ops

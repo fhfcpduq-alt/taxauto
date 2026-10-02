@@ -12,8 +12,11 @@
     compute_meta.json    compute   : 계산 메타(적용 세율·한도·근거)
     wehago_return.json   normalize : 위하고 신고서 내보내기 파일이 있으면 그 값(대사용, 선택)
     review.json          validate  : list[ReviewItem]  (사람 처리결과는 재실행해도 보존)
-    report/              report    : review.html, kakao.txt, wehago_upload.xlsx ...
+    report/              report    : review.html, kakao.txt, review_items.xlsx ...
     state.json           pipeline  : 단계별 상태·시각·오류
+    filing.json          pipeline  : 이번 실행의 Filing (작업지시서가 읽음)
+    decisions.jsonl      ops       : 사람/에이전트 재분류 감사 기록
+    wehago/              wehago    : work_order.json, agent_log.jsonl, 스크린샷·재생 로그
   data/{period}/_summary.json, _dashboard.html, _briefing.md   (전체 거래처 요약)
 """
 

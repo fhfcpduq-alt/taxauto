@@ -325,3 +325,33 @@ def test_2f_individual_six_months_and_late_purchase(tmp_path):
     late = [t for t in txns if t.approval_no == FACTS["C002"]["prelim_omitted_purchase_approval"]]
     assert late and late[0].tx_date < c2.filing.coverage_start   # 기간 밖이지만 유지
     assert any("집계기간" in i["message"] for i in c2.workspace.load_parse_issues())
+
+
+# --- 계산 섹터용 raw 표시 -------------------------------------------------
+
+def test_buyer_issued_flag(tmp_path):
+    me = CL["C002"].biz_no
+    rows = _etax_rows("1248100038", me, title="전자세금계산서 목록조회 (매입)")
+    rows[1].append("전자세금계산서분류")
+    rows[2].append("매입자발행세금계산서")
+    rows.append(["2026-07-02", "A-2", "1248100038", "갑", me, "을", 2000, 200, "세금계산서"])
+    p = _write(tmp_path / "전자세금계산서_매입.xlsx", rows)
+    a, b = parse_file(p, CL["C002"], F2P["C002"]).transactions
+    assert a.raw.get("buyer_issued") is True and "매입자발행" in a.memo
+    assert "buyer_issued" not in b.raw
+
+
+def test_tax_invoice_duplicate_flag(tmp_path):
+    p = _write(tmp_path / "현금영수증_매출.xlsx", [
+        ["현금영수증 매출내역"], ["매출일시", "총금액", "세금계산서발급여부", "비고"],
+        ["2026-07-01", 11_000, "Y", ""], ["2026-07-02", 22_000, "N", ""], ["2026-07-03", 33_000, "", "세금계산서 발급분"],
+    ])
+    a, b, c = parse_file(p, CL["C001"], F2P["C001"]).transactions
+    assert a.raw.get("tax_invoice_duplicate") is True
+    assert "tax_invoice_duplicate" not in b.raw
+    assert c.raw.get("tax_invoice_duplicate") is True
+    # 세금계산서 자체에는 표시하지 않음
+    me = CL["C002"].biz_no
+    p2 = _write(tmp_path / "전자세금계산서_매출.xlsx", _etax_rows(me, "1248100038") )
+    t = parse_file(p2, CL["C002"], F2P["C002"]).transactions[0]
+    assert "tax_invoice_duplicate" not in t.raw and "buyer_issued" not in t.raw

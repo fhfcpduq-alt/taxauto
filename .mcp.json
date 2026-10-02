@@ -1,5 +1,15 @@
 {
   "mcpServers": {
+    "taxauto": {
+      "command": "python",
+      "args": [
+        "-m",
+        "taxauto.agent.mcp_server"
+      ],
+      "env": {
+        "TAXAUTO_HOME": "."
+      }
+    },
     "playwright": {
       "command": "cmd",
       "args": [
