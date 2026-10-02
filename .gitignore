@@ -1,0 +1,17 @@
+# 실제 거래처 데이터는 절대 커밋하지 않는다
+data/
+clients/
+inbox/
+secrets/
+*.pfx
+*.der
+*.key
+.env
+
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/

@@ -1,0 +1,80 @@
+# 부가가치세 세법 파라미터 (값은 데이터, 코드는 키만 참조)
+# 규칙
+#  - 키 이름은 코드와의 계약이므로 바꾸지 말 것(추가만).
+#  - 개정되면 기존 항목의 to: 를 닫고 새 버전을 아래에 추가.
+#  - verified: true 는 법령/국세청 자료로 직접 확인한 경우에만. checked_on 필수.
+#  - 이 파일은 세법검증 섹터가 근거를 확인해 갱신한다. 초기값은 설계자 기억값(verified: false).
+
+vat.rate:
+  - value: 0.10
+    source: "부가가치세법 제30조"
+    verified: false
+
+# 신고·납부기한 (MM-DD). 토·일·공휴일이면 다음 영업일(국세기본법 제5조)
+deadline.1P: [{value: "04-25", source: "부가가치세법 제48조", verified: false}]
+deadline.1F: [{value: "07-25", source: "부가가치세법 제49조", verified: false}]
+deadline.2P: [{value: "10-25", source: "부가가치세법 제48조", verified: false}]
+deadline.2F: [{value: "01-25", source: "부가가치세법 제49조 (다음해)", verified: false}]
+
+# 신용카드매출전표등 발행세액공제 (부가가치세법 제46조)
+card_issue_credit.rate:
+  - value: 0.013
+    from: 2024-01-01
+    to: 2026-12-31
+    source: "부가가치세법 제46조 제1항"
+    verified: false
+card_issue_credit.annual_limit:
+  - value: 10000000
+    from: 2024-01-01
+    to: 2026-12-31
+    source: "부가가치세법 제46조 제1항"
+    verified: false
+card_issue_credit.prior_year_supply_cap:   # 직전연도 공급가액(사업장별) 10억 초과 개인 제외
+  - value: 1000000000
+    source: "부가가치세법 제46조 제1항, 시행령 제88조"
+    verified: false
+
+# 예정고지
+prelim_notice.individual_min:         # 개인 예정고지세액 50만원 미만이면 고지 안 함
+  - value: 500000
+    source: "부가가치세법 제48조 제3항"
+    verified: false
+prelim_notice.corp_small_supply_cap:  # 직전 과세기간 공급가액 1.5억 미만 법인은 예정고지 대상
+  - value: 150000000
+    source: "부가가치세법 제48조 제3항"
+    verified: false
+
+# 세금계산서 발급기한: 공급시기 속하는 달의 다음 달 n일
+tax_invoice.issue_deadline_day: [{value: 10, source: "부가가치세법 제34조 제3항", verified: false}]
+
+# 가산세율 (부가가치세법 제60조)
+penalty.ti_late_issue: [{value: 0.01, source: "제60조 제2항 제1호(지연발급)", verified: false}]
+penalty.ti_not_issued: [{value: 0.02, source: "제60조 제2항 제2호(미발급)", verified: false}]
+penalty.eti_late_transmit: [{value: 0.003, source: "제60조 제2항 제3호(지연전송)", verified: false}]
+penalty.eti_not_transmit: [{value: 0.005, source: "제60조 제2항 제4호(미전송)", verified: false}]
+penalty.ti_late_receipt: [{value: 0.005, source: "제60조 제7항 제1호(지연수취)", verified: false}]
+penalty.underreport_general: [{value: 0.10, source: "국세기본법 제47조의3", verified: false}]
+penalty.late_payment_daily: [{value: 0.00022, source: "국세기본법 제47조의4 / 시행령 제27조의4", verified: false}]
+
+# 의제매입세액 공제율 (부가가치세법 제42조, 시행령 제84조) - 분수 문자열
+deemed_input.restaurant_individual_le_200m:   # 개인 음식점 과세표준 2억 이하
+  - value: "9/109"
+    to: 2026-12-31
+    source: "시행령 제84조"
+    verified: false
+deemed_input.restaurant_individual:           # 개인 음식점(그 외)
+  - value: "8/108"
+    source: "부가가치세법 제42조 제1항"
+    verified: false
+deemed_input.restaurant_corp:
+  - value: "6/106"
+    source: "부가가치세법 제42조 제1항"
+    verified: false
+deemed_input.manufacturing_individual_sme:     # 과자점·도정업·떡류 등 6/106, 그 외 중소·개인 제조 4/104
+  - value: "4/104"
+    source: "시행령 제84조"
+    verified: false
+deemed_input.other:
+  - value: "2/102"
+    source: "부가가치세법 제42조 제1항"
+    verified: false

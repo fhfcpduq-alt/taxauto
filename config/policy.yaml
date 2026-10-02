@@ -1,0 +1,24 @@
+# 사무실 내부 기준 (세법이 아님 - 마음대로 조정 가능)
+
+review:
+  sales_change_warn_ratio: 0.30        # 전기 대비 매출 ±30% 이상 변동 시 경고(누락 의심)
+  purchase_change_warn_ratio: 0.50
+  fixed_asset_review_amount: 1000000   # 공급가액 100만원 이상 매입은 고정자산 여부 검토
+  vat_rounding_tolerance: 1            # 공급가액×10% 와 세액 차이 허용(원)
+  card_vs_ti_match_days: 7             # 카드매출-세금계산서 중복 의심 매칭 허용 일수
+  llm_auto_accept_confidence: 0.90     # AI 판정 신뢰도가 이 이상이면 자동 반영(검토는 표시)
+
+llm:
+  enabled: false                      # 기본 꺼짐. 켜면 미분류 매입만 AI에 보냄(가맹점명·업종·금액만)
+  model: "claude-sonnet-5-5"          # 모델이 좋아지면 이 한 줄만 교체
+  bulk_model: "claude-haiku-4-5-20251001"
+  max_items_per_run: 300
+
+nts_status:
+  enabled: false                      # 공공데이터포털 '사업자등록정보 진위확인 및 상태조회' 키 필요
+  cache_days: 30
+
+run:
+  stages: [collect, normalize, enrich, classify, compute, validate, report]
+  workspace: "data"                   # data/{period}/{client_id}/
+  inbox: "inbox"                      # inbox/{period}/{client_id}/*.xlsx  (홈택스·위하고 내려받은 파일)

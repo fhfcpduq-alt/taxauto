@@ -1,0 +1,28 @@
+[project]
+name = "taxauto"
+version = "0.1.0"
+description = "세무회계 민 - 부가가치세 신고 야간 자동화 엔진 (WEHAGO 병행)"
+requires-python = ">=3.11"
+dependencies = [
+  "openpyxl>=3.1",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+agent = ["mcp>=1.0", "anthropic>=0.40"]
+browser = ["playwright>=1.45"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+taxauto = "taxauto.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
