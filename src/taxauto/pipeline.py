@@ -645,7 +645,8 @@ def write_summary(period_code: str, *, paths: Paths | None = None, base_dir: Pat
         try:
             from .report.stage import build_office_reports
 
-            build_office_reports(pdir)
+            top_n = int((load_policy(paths.config_dir).get("run") or {}).get("briefing_top_n") or 5)
+            build_office_reports(pdir, top_n=top_n)
         except Exception:
             log.exception("사무실 리포트(_dashboard/_briefing) 작성 실패")
     return summary

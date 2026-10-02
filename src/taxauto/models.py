@@ -279,10 +279,23 @@ class Classification:
     confidence: float = 1.0
     needs_review: bool = False
     note: str = ""
+    # --- 위하고 전표 작성 스타일(학습 섹터가 채움). 비어 있으면 위하고 기본값 유지 ---
+    account_code: str = ""        # 계정코드 (예: "830")
+    account_name: str = ""        # 계정과목 (예: "소모품비")
+    entry_type: str = ""          # 위하고 매입매출 유형 (예: "과세","불공","카과","카면","현과","면세")
+    settlement: str = ""          # 결제/분개 상대: "현금" | "외상" | "카드" | "혼합"
+    summary_text: str = ""        # 적요
+    style_source: str = ""        # 판정 근거 (예: "memory:C001", "industry:restaurant#r12", "fewshot")
 
     @classmethod
     def from_dict(cls, d: dict) -> "Classification":
         return cls(
+            account_code=str(d.get("account_code", "") or ""),
+            account_name=d.get("account_name", "") or "",
+            entry_type=d.get("entry_type", "") or "",
+            settlement=d.get("settlement", "") or "",
+            summary_text=d.get("summary_text", "") or "",
+            style_source=d.get("style_source", "") or "",
             category=PurchaseCategory(d["category"]),
             non_deductible_reason=NonDeductibleReason(d["non_deductible_reason"]) if d.get("non_deductible_reason") else None,
             exclusion_reason=ExclusionReason(d["exclusion_reason"]) if d.get("exclusion_reason") else None,

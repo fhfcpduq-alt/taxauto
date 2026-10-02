@@ -1,0 +1,427 @@
+# 수집 파일(엑셀/CSV) 종류별 정의 — 수집·정규화 섹터(taxauto.ingest.normalize)가 읽는다.
+#
+# 실제 홈택스·위하고 엑셀 헤더를 100% 알 수 없으므로 '별칭(alias) 목록'으로 넉넉하게 정의한다.
+# 새 양식을 만나면 코드 수정 없이 여기 별칭만 추가하면 된다.
+#
+# 헤더 비교 규칙(taxauto.ingest.excel.norm_header)
+#   - 공백·줄바꿈·'*'·'·'·':' 제거, 괄호 안 내용 제거, 소문자화 후 '완전 일치'로 비교
+#     예) "공급가액(원)" == "공급 가액" == "공급가액"
+#   - "상호@2"  : 같은 이름의 헤더가 여러 개일 때 n번째(1부터) 열   (홈택스 목록의 공급자/공급받는자 '상호')
+#   - 2단 헤더(병합된 상단 그룹 + 하단 헤더)는 "그룹+헤더" 로도 비교한다  예) 공급자 / 상호 → "공급자상호"
+#   - 별칭은 '앞에 쓴 것 우선'. 한 열은 한 필드에만 배정된다(필드도 위에서부터 순서대로 배정).
+#
+# 판별(detect) 규칙 — 종류 후보 중 점수가 가장 높은 것을 고른다.
+#   required      : 모두 매핑돼야 하는 필드(=판별 키 헤더)
+#   any           : 하나 이상 매핑돼야 하는 필드
+#   forbid        : 매핑되면 안 되는 필드(다른 종류와 구분용)
+#   keywords_all  : 문맥(파일명+시트명+제목행+헤더행 텍스트)에 모두 있어야 함
+#   keywords_any  : 문맥에 하나 이상 있어야 함
+#   keywords_none : 문맥에 있으면 안 됨
+#   bonus         : 문맥에 있으면 가산점(+3/개)  ← 매출/매입처럼 헤더가 같은 양식 구분용
+#   점수 = 매핑된 필드 수 + 가산점
+#
+# 종류 속성
+#   source/direction/doc_type/card_kind : models.py Enum '이름'.  direction: AUTO = 행별 판별
+#   pair         : 사업자번호로 본 방향이 반대일 때 바꿔 쓸 종류(전자세금계산서 매출↔매입)
+#   vat_inclusive: 공급가액/세액 열이 없고 합계(공급대가)만 있으면 세액 = 합계×10/110(절사)로 분리
+#   tax_free     : 세액 0 (계산서)
+#
+# 필드(정규화 키) 목록
+#   tx_date issue_date transmit_date month(년월, 월합계 자료) day(일, 위하고 월/일 분리형)
+#   approval_no supplier_biz_no supplier_name buyer_biz_no buyer_name
+#   counterparty_biz_no counterparty_name client_biz_no(수임처·본인 사업자번호)
+#   total supply_amount vat service_charge count
+#   classification invoice_type issue_type item memo
+#   card_no card_company merchant_category merchant_tax_type deductible
+#   tx_type(승인/취소) purpose(소득공제/지출증빙) tax_free_flag(면세표시)
+#   vat_type(위하고 유형) direction_text(매출/매입) zero_rated_text amended_text doc_kind_text
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# 공통 별칭 (YAML anchor 로 재사용)
+# ---------------------------------------------------------------------------
+_common:
+  etax_fields: &etax_fields
+    tx_date: [작성일자, 작성일, 공급일자, 공급연월일, 작성년월일]
+    approval_no: [승인번호, 전자세금계산서승인번호, 국세청승인번호, 전자계산서승인번호]
+    issue_date: [발급일자, 발행일자, 발급일, 발급일시]
+    transmit_date: [전송일자, 국세청전송일자, 전송일, 전송일시]
+    supplier_biz_no: [공급자사업자등록번호, 공급자사업자번호, 공급자등록번호, 공급자사업자, 사업자등록번호@1, 등록번호@1]
+    supplier_name: [공급자상호, 공급자상호명, 공급자명, 공급자법인명, 상호@1, 상호명@1, 법인명@1]
+    buyer_biz_no: [공급받는자사업자등록번호, 공급받는자등록번호, 공급받는자사업자번호, 공급받는자사업자, 사업자등록번호@2, 등록번호@2]
+    buyer_name: [공급받는자상호, 공급받는자상호명, 공급받는자명, 공급받는자법인명, 상호@2, 상호명@2, 법인명@2]
+    client_biz_no: [수임처사업자등록번호, 수임처사업자번호, 수임처등록번호]
+    total: [합계금액, 합계, 총금액, 공급대가, 총합계금액]
+    supply_amount: [공급가액, 공급가액합계, 총공급가액, 공급가]
+    vat: [세액, 부가세, 부가가치세, 세액합계, 총세액]
+    classification: [전자세금계산서분류, 세금계산서분류, 전자계산서분류, 계산서분류, 분류]
+    invoice_type: [전자세금계산서종류, 세금계산서종류, 전자계산서종류, 계산서종류, 종류]
+    issue_type: [발급유형, 발행유형, 발급구분]
+    item: [품목명, 품목, 대표품목, 품명, 대표품목명]
+    memo: [비고, 적요]
+
+  card_purchase_fields: &card_purchase_fields
+    tx_date: [승인일자, 거래일자, 사용일자, 이용일자, 승인일시, 거래일시, 매출일자, 이용일]
+    approval_no: [승인번호, 카드승인번호]
+    card_no: [카드번호, 신용카드번호, 카드No]
+    card_company: [카드사, 카드사명, 카드종류, 발급사]
+    counterparty_biz_no: [가맹점사업자번호, 가맹점사업자등록번호, 가맹점사업자, 사업자번호, 사업자등록번호]
+    counterparty_name: [가맹점명, 가맹점상호, 가맹점, 상호, 사용처, 이용가맹점]
+    client_biz_no: [수임처사업자등록번호, 수임처사업자번호, 카드소지사업자번호]
+    supply_amount: [공급가액, 공급가]
+    vat: [부가세, 세액, 부가가치세]
+    service_charge: [봉사료]
+    total: [합계, 합계금액, 승인금액, 이용금액, 사용금액, 총금액, 결제금액, 거래금액]
+    merchant_tax_type: [가맹점유형, 가맹점과세유형, 과세유형, 사업자유형, 가맹점구분, 과세구분]
+    merchant_category: [업종, 가맹점업종, 업종명, 가맹점업종명, 업태, 종목]
+    deductible: [공제여부결정, 공제여부, 공제구분, 매입세액공제여부, 공제/불공제]
+    tx_type: [거래구분, 승인구분, 취소여부, 매출구분]
+    memo: [비고]
+
+kinds:
+  # -------------------------------------------------------------------------
+  # 전자세금계산서 (홈택스 > 조회/발급 > 전자세금계산서 > 목록조회 > 엑셀)
+  # 매출/매입 양식이 같으므로 제목·파일명의 '매출/매입' 가산점 + 행별 사업자번호로 방향 확정
+  # -------------------------------------------------------------------------
+  etax_sales:
+    label: 홈택스 전자세금계산서 매출 목록
+    source: ETAX_SALES
+    direction: SALES
+    doc_type: TAX_INVOICE
+    pair: etax_purchase
+    detect:
+      required: [tx_date, supply_amount, vat]
+      any: [approval_no, supplier_biz_no, buyer_biz_no]
+      keywords_none: [전자계산서목록, 종이세금계산서, 매입매출전표, 현금영수증, 신용카드]
+      bonus: [매출, 발급분, 발행분]
+    fields: *etax_fields
+
+  etax_purchase:
+    label: 홈택스 전자세금계산서 매입 목록
+    source: ETAX_PURCHASE
+    direction: PURCHASE
+    doc_type: TAX_INVOICE
+    pair: etax_sales
+    detect:
+      required: [tx_date, supply_amount, vat]
+      any: [approval_no, supplier_biz_no, buyer_biz_no]
+      keywords_none: [전자계산서목록, 종이세금계산서, 매입매출전표, 현금영수증, 신용카드]
+      bonus: [매입, 수취분, 수취]
+    fields: *etax_fields
+
+  # 전자계산서(면세). 세액 열이 없거나 0. '전자계산서' 문구 필수(전자세금계산서와 구분)
+  einv_sales:
+    label: 홈택스 전자계산서 매출 목록
+    source: EINV_SALES
+    direction: SALES
+    doc_type: INVOICE
+    pair: einv_purchase
+    tax_free: true
+    detect:
+      required: [tx_date, supply_amount]
+      any: [approval_no, supplier_biz_no, buyer_biz_no]
+      keywords_any: [전자계산서, 면세계산서]
+      bonus: [매출, 발급분, 전자계산서, 전자계산서]
+    fields: *etax_fields
+
+  einv_purchase:
+    label: 홈택스 전자계산서 매입 목록
+    source: EINV_PURCHASE
+    direction: PURCHASE
+    doc_type: INVOICE
+    pair: einv_sales
+    tax_free: true
+    detect:
+      required: [tx_date, supply_amount]
+      any: [approval_no, supplier_biz_no, buyer_biz_no]
+      keywords_any: [전자계산서, 면세계산서]
+      bonus: [매입, 수취분, 전자계산서, 전자계산서]
+    fields: *etax_fields
+
+  # -------------------------------------------------------------------------
+  # 신용카드 매출 (홈택스 신용카드 매출자료 조회 = 월별 합계 / 여신금융협회·카드사 = 건별)
+  # 합계(공급대가)만 있으므로 10/110 분리
+  # -------------------------------------------------------------------------
+  card_sales:
+    label: 신용카드 매출자료
+    source: CARD_SALES
+    direction: SALES
+    doc_type: CARD
+    vat_inclusive: true
+    detect:
+      required: [total]
+      any: [tx_date, month]
+      forbid: [counterparty_biz_no, counterparty_name, supplier_biz_no, buyer_biz_no]
+      keywords_any: [신용카드, 카드매출, 카드사, 카드]
+      keywords_none: [현금영수증, 판매대행, 결제대행, 사업용, 매입, 화물, 복지카드]
+      bonus: [매출, 매출자료]
+    fields:
+      month: [승인년월, 거래년월, 매출년월, 년월, 승인월, 기간]
+      tx_date: [승인일자, 거래일자, 매출일자, 승인일시, 거래일시]
+      approval_no: [승인번호]
+      card_no: [카드번호]
+      card_company: [카드사, 카드사명, 매입사, 발급사]
+      count: [건수, 승인건수, 매출건수]
+      total: [매출액계, 매출액합계, 매출합계, 합계금액, 합계, 승인금액, 매출금액, 결제금액, 총금액, 신용카드결제, 신용카드결제금액]
+      supply_amount: [공급가액]
+      vat: [부가세, 세액]
+      service_charge: [봉사료]
+      tax_free_flag: [면세여부, 과세구분, 과세유형]
+      tx_type: [거래구분, 승인구분, 취소여부]
+      memo: [비고]
+
+  # -------------------------------------------------------------------------
+  # 현금영수증 매출/매입 (홈택스 > 현금영수증 > 매출/매입 내역 조회)
+  # -------------------------------------------------------------------------
+  cash_receipt_sales:
+    label: 현금영수증 매출내역
+    source: CASH_RECEIPT_SALES
+    direction: SALES
+    doc_type: CASH_RECEIPT
+    vat_inclusive: true
+    detect:
+      required: [total]
+      any: [tx_date, month]
+      forbid: [counterparty_biz_no]
+      keywords_all: [현금영수증]
+      keywords_none: [매입내역, 지출증빙매입, 사용내역]
+      bonus: [매출, 발급]
+    fields:
+      month: [매출년월, 거래년월, 승인년월, 년월]
+      tx_date: [매출일시, 매출일자, 거래일시, 거래일자, 승인일자, 발급일자]
+      approval_no: [승인번호]
+      count: [건수, 발급건수]
+      supply_amount: [공급가액]
+      vat: [부가세, 세액, 부가가치세]
+      service_charge: [봉사료]
+      total: [총금액, 합계금액, 합계, 거래금액, 매출금액, 금액]
+      tx_type: [거래구분, 승인구분, 취소여부]
+      purpose: [용도구분, 용도, 발급용도, 소득공제/지출증빙]
+      tax_free_flag: [면세여부, 과세구분]
+      memo: [비고]
+
+  cash_receipt_purchase:
+    label: 현금영수증 매입(지출증빙)내역
+    source: CASH_RECEIPT_PURCHASE
+    direction: PURCHASE
+    doc_type: CASH_RECEIPT
+    vat_inclusive: true
+    detect:
+      required: [tx_date, total]
+      any: [counterparty_biz_no, counterparty_name]
+      keywords_all: [현금영수증]
+      bonus: [매입, 지출증빙, 사용]
+    fields:
+      tx_date: [매입일시, 매입일자, 사용일시, 사용일자, 거래일시, 거래일자, 승인일자]
+      approval_no: [승인번호]
+      counterparty_biz_no: [가맹점사업자번호, 가맹점사업자등록번호, 사업자번호, 사업자등록번호, 발급자사업자번호]
+      counterparty_name: [가맹점명, 가맹점상호, 상호, 발급자상호, 사용처]
+      supply_amount: [공급가액]
+      vat: [부가세, 세액, 부가가치세]
+      service_charge: [봉사료]
+      total: [총금액, 합계금액, 합계, 거래금액, 사용금액, 금액]
+      merchant_tax_type: [가맹점유형, 과세유형, 사업자유형]
+      merchant_category: [업종, 업종명, 가맹점업종]
+      deductible: [공제여부, 공제여부결정, 매입세액공제여부]
+      tx_type: [거래구분, 승인구분, 취소여부]
+      memo: [비고]
+
+  # -------------------------------------------------------------------------
+  # 사업용 신용카드 매입 (홈택스 > 사업용 신용카드 > 매입세액 공제 확인/변경 > 엑셀)
+  # 공제여부·가맹점유형(과세유형)·업종 컬럼이 있으면 그대로 원천표시로 보존
+  # -------------------------------------------------------------------------
+  card_purchase:
+    label: 사업용신용카드 매입내역
+    source: CARD_PURCHASE
+    direction: PURCHASE
+    doc_type: CARD
+    card_kind: BUSINESS
+    vat_inclusive: true
+    detect:
+      required: [tx_date]
+      any: [counterparty_biz_no, counterparty_name]
+      keywords_none: [현금영수증, 화물, 복지카드, 판매대행, 결제대행]
+      bonus: [사업용, 매입, 신용카드, 카드]
+    fields: *card_purchase_fields
+
+  # 화물운전자복지카드 (유가보조금 카드) — 양식은 카드매입과 같고 문구로 구분
+  welfare_card:
+    label: 화물운전자복지카드 매입내역
+    source: CARD_PURCHASE
+    direction: PURCHASE
+    doc_type: CARD
+    card_kind: WELFARE
+    vat_inclusive: true
+    detect:
+      required: [tx_date]
+      any: [counterparty_biz_no, counterparty_name]
+      keywords_any: [화물운전자, 복지카드, 화물복지]
+      bonus: [화물, 복지카드]
+    fields: *card_purchase_fields
+
+  # -------------------------------------------------------------------------
+  # 판매(결제)대행 매출 — 홈택스 '판매(결제)대행 매출자료', 배민·쿠팡이츠·요기요 정산서, PG 정산
+  # -------------------------------------------------------------------------
+  pg_sales:
+    label: 판매대행(배달앱/PG) 매출
+    source: PG_SALES
+    direction: SALES
+    doc_type: NONE
+    vat_inclusive: true
+    detect:
+      required: [total]
+      any: [month, tx_date]
+      keywords_any: [판매대행, 결제대행, 판매(결제)대행, 배달, 배민, 배달의민족, 쿠팡이츠, 요기요, 정산, pg]
+      keywords_none: [사업용, 현금영수증]
+      bonus: [판매대행, 결제대행]
+    fields:
+      month: [매출년월, 거래년월, 판매년월, 결제년월, 정산년월, 년월]
+      tx_date: [거래일자, 결제일자, 주문일자, 매출일자, 정산일자]
+      counterparty_biz_no: [판매대행사사업자등록번호, 판매대행사사업자번호, 결제대행사사업자등록번호, 결제대행업체사업자번호, 대행사사업자번호, 사업자등록번호, 사업자번호]
+      counterparty_name: [판매대행사명, 판매대행업체명, 결제대행업체명, 결제대행사명, 대행사명, 판매대행사, 플랫폼, 상호]
+      count: [건수, 결제건수, 주문건수, 판매건수]
+      total: [판매금액, 결제금액, 판매결제금액, 판매(결제)금액, 매출금액, 매출액, 주문금액, 합계금액, 합계, 금액]
+      supply_amount: [공급가액]
+      vat: [부가세, 세액]
+      tax_free_flag: [면세여부, 과세구분]
+      tx_type: [거래구분, 취소여부]
+      memo: [비고]
+
+  # -------------------------------------------------------------------------
+  # 위하고 매입매출전표 내보내기 (대사용, compute 에서는 제외해야 함)
+  # 유형 코드(11 과세, 51 과세 …)로 방향·증빙 결정. 실제 내보내기 헤더는 미확인 → 별칭 넉넉히
+  # -------------------------------------------------------------------------
+  wehago_ledger:
+    label: 위하고 매입매출전표 내보내기
+    source: WEHAGO_LEDGER
+    direction: AUTO
+    doc_type: TAX_INVOICE
+    detect:
+      required: [vat_type, supply_amount]
+      any: [tx_date, day]
+      keywords_none: [종이세금계산서]
+      bonus: [매입매출, 전표, 위하고, wehago]
+    fields:
+      tx_date: [전표일자, 일자, 거래일자, 작성일자, 날짜]
+      month: [월]
+      day: [일]
+      vat_type: [유형, 부가세유형, 과세유형, 매입매출유형, 전표유형]
+      direction_text: [구분, 매입매출구분]
+      item: [품목, 품명, 적요]
+      supply_amount: [공급가액, 공급가]
+      vat: [부가세, 세액, 부가가치세]
+      total: [합계, 합계금액]
+      counterparty_name: [거래처, 거래처명, 상호]
+      counterparty_biz_no: [사업자번호, 사업자등록번호, 거래처사업자번호, 등록번호]
+      approval_no: [승인번호, 전자세금계산서승인번호]
+      memo: [비고, 분개]
+    # 위하고(더존) 매입매출전표 유형코드. 실제 코드 체계 확인 필요(SmartA 기준 기억값)
+    vat_type_map:
+      "11": {name: 과세, direction: SALES, doc_type: TAX_INVOICE}
+      "12": {name: 영세, direction: SALES, doc_type: TAX_INVOICE, zero_rated: true}
+      "13": {name: 면세, direction: SALES, doc_type: INVOICE}
+      "14": {name: 건별, direction: SALES, doc_type: NONE}
+      "15": {name: 간이, direction: SALES, doc_type: NONE}
+      "16": {name: 수출, direction: SALES, doc_type: NONE, zero_rated: true}
+      "17": {name: 카과, direction: SALES, doc_type: CARD}
+      "18": {name: 카면, direction: SALES, doc_type: CARD}
+      "19": {name: 카영, direction: SALES, doc_type: CARD, zero_rated: true}
+      "20": {name: 면건, direction: SALES, doc_type: NONE}
+      "22": {name: 현과, direction: SALES, doc_type: CASH_RECEIPT}
+      "23": {name: 현면, direction: SALES, doc_type: CASH_RECEIPT}
+      "24": {name: 현영, direction: SALES, doc_type: CASH_RECEIPT, zero_rated: true}
+      "51": {name: 과세, direction: PURCHASE, doc_type: TAX_INVOICE}
+      "52": {name: 영세, direction: PURCHASE, doc_type: TAX_INVOICE, zero_rated: true}
+      "53": {name: 면세, direction: PURCHASE, doc_type: INVOICE}
+      "54": {name: 불공, direction: PURCHASE, doc_type: TAX_INVOICE}
+      "55": {name: 수입, direction: PURCHASE, doc_type: TAX_INVOICE}
+      "57": {name: 카과, direction: PURCHASE, doc_type: CARD}
+      "58": {name: 카면, direction: PURCHASE, doc_type: CARD}
+      "59": {name: 카영, direction: PURCHASE, doc_type: CARD, zero_rated: true}
+      "60": {name: 면건, direction: PURCHASE, doc_type: NONE}
+      "61": {name: 현과, direction: PURCHASE, doc_type: CASH_RECEIPT}
+      "62": {name: 현면, direction: PURCHASE, doc_type: CASH_RECEIPT}
+
+  # -------------------------------------------------------------------------
+  # 수기 종이세금계산서 입력양식 (사무실 자체 양식). 빈 양식: python examples/make_paper_invoice_template.py
+  # -------------------------------------------------------------------------
+  paper_invoice:
+    label: 종이세금계산서 입력양식(사무실)
+    source: PAPER_TAX_INVOICE
+    direction: AUTO
+    doc_type: TAX_INVOICE
+    detect:
+      required: [direction_text, tx_date, supply_amount]
+      keywords_any: [종이세금계산서, 수기세금계산서, 종이계산서]
+      bonus: [종이세금계산서]
+    fields:
+      direction_text: [구분, 매출매입, 매출/매입]
+      doc_kind_text: [증빙종류, 종류]
+      tx_date: [작성일자, 작성일, 공급일자]
+      counterparty_biz_no: [거래처사업자번호, 거래처사업자등록번호, 사업자번호, 사업자등록번호]
+      counterparty_name: [거래처상호, 거래처명, 상호]
+      item: [품목, 품목명]
+      supply_amount: [공급가액]
+      vat: [세액, 부가세]
+      total: [합계, 합계금액]
+      zero_rated_text: [영세율, 영세율여부]
+      amended_text: [수정, 수정여부, 수정세금계산서]
+      memo: [비고]
+    # 빈 양식 열 순서(examples/make_paper_invoice_template.py 가 사용)
+    template:
+      title: 종이세금계산서 입력양식 (세무회계 민)
+      guide: "구분=매출/매입, 증빙종류=세금계산서/계산서, 날짜=2026-07-03, 영세율·수정=Y/N. 1행에 1장씩 입력."
+      columns: [구분, 증빙종류, 작성일자, 거래처사업자번호, 거래처상호, 품목, 공급가액, 세액, 합계, 영세율, 수정, 비고]
+
+# ---------------------------------------------------------------------------
+# 값 해석 공통
+# ---------------------------------------------------------------------------
+values:
+  cancel_markers: [취소, 승인취소, 반품]
+  zero_rated_markers: [영세]
+  amended_markers: [수정]
+  tax_free_markers: [면세]
+  deductible_true: [공제, Y, y, O, o, 예, 대상, "공제대상"]
+  deductible_false: [불공제, N, n, X, x, 아니오, 제외, 불공제대상, 공제제외]
+  summary_row_markers: [합계, 총계, 소계, 누계, 계]   # 첫 몇 칸에 이 문구만 있으면 합계행으로 보고 건너뜀
+  direction_sales: [매출]
+  direction_purchase: [매입]
+
+# ---------------------------------------------------------------------------
+# 위하고 부가가치세 신고서 내보내기 (선택, 대사용) — 실제 양식 미확인. 라인명→행 라벨 별칭.
+#  - 행에 "(1)" 처럼 괄호 번호가 있으면 Line 값(서식 번호)으로 우선 매칭
+#  - 아니면 labels 별칭: "A+B" = 행 텍스트(+왼쪽 구분열 이어받기)에 A, B 가 모두 포함
+#  - 금액/세액: amount_headers/tax_headers 열이 있으면 그 열, 없으면 라벨 오른쪽 숫자 1번째=금액, 2번째=세액
+# ---------------------------------------------------------------------------
+wehago_return:
+  detect:
+    keywords_any: [부가가치세신고서, 일반과세자부가가치세, 부가세신고서, 신고서]
+    min_lines: 3
+  amount_headers: [금액, 과세표준, 공급가액]
+  tax_headers: [세액]
+  labels:
+    S_TAX_INVOICE: [과세+세금계산서발급분, 과세+세금계산서]
+    S_BUYER_ISSUED: [매입자발행세금계산서+과세]
+    S_CARD_CASH: [신용카드·현금영수증발행분, 신용카드현금영수증발행분, 신용카드+발행분]
+    S_OTHER: [과세+기타, 정규영수증외매출분]
+    S_ZR_TAX_INVOICE: [영세율+세금계산서발급분, 영세+세금계산서]
+    S_ZR_OTHER: [영세율+기타, 영세+기타]
+    S_PRELIM_OMITTED: [예정신고누락분+매출, 매출+예정신고누락분]
+    S_BAD_DEBT: [대손세액가감]
+    S_TOTAL: [매출+합계, 과세표준및매출세액+합계]
+    P_TI_GENERAL: [세금계산서수취분+일반매입]
+    P_TI_FIXED: [세금계산서수취분+고정자산매입, 고정자산매입]
+    P_PRELIM_OMITTED: [매입+예정신고누락분]
+    P_BUYER_ISSUED: [매입자발행세금계산서+매입]
+    P_OTHER_DEDUCTIBLE: [그밖의공제매입세액, 그밖의공제]
+    P_TOTAL: [매입세액+합계]
+    P_NON_DEDUCTIBLE: [공제받지못할매입세액]
+    P_NET: [차감계]
+    PAYABLE: [납부(환급)세액, 납부환급세액]
+    C_CARD_ISSUE: [신용카드매출전표등발행공제]
+    C_TOTAL: [경감·공제세액+합계, 경감공제세액+합계]
+    PRELIM_UNREFUNDED: [예정신고미환급세액]
+    PRELIM_NOTICE: [예정고지세액]
+    PENALTY: [가산세액계, 가산세액]
+    FINAL: [차가감하여납부할세액, 차가감납부할세액, 납부할세액]

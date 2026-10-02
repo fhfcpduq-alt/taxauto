@@ -1,0 +1,214 @@
+# 매입 공제판정 룰 (taxauto.classify.rules)
+#
+# - 위에서부터 순서대로 검사, 처음 맞는 룰 하나만 적용(첫 매칭).
+# - before_memory: true 인 룰은 거래처 학습 메모리보다 먼저 적용(중복·폐업자처럼 거래 단위로 판정해야 하는 것).
+# - 세법 숫자는 여기 쓰지 않는다. 금액 기준은 policy 경로("policy:review.fixed_asset_review_amount"),
+#   업종 목록은 법 파라미터 키(law_keywords)로 참조.
+#
+# when (모두 만족해야 매칭)
+#   sources            : [Source 값...]           예) 신용카드_매입
+#   doc_types          : [DocType 값...]          예) 세금계산서
+#   text_regex         : 가맹점명+업종+품목+메모 정규식
+#   merchant_regex     : 가맹점명+가맹점업종 정규식
+#   item_regex         : 품목 정규식
+#   client_industry_regex : 거래처(우리 고객) 업태/종목 정규식
+#   supply_min/supply_max : 공급가액 범위 (정수 또는 "policy:경로")
+#   vat_min/vat_max    : 세액 범위
+#   tax_type_contains / tax_type_not_contains : 상대방 과세유형 문자열 포함/불포함(목록 중 하나라도)
+#   deductible_flag    : 원천(홈택스) 공제여부 표시 true/false
+#   closed_before_tx   : 상대방 폐업일 ≤ 거래일
+#   has_matching_tax_invoice : 같은 거래상대·같은 금액 세금계산서 수취분 존재(카드·현금영수증 매입)
+#   client_deemed_input: 거래처에 의제매입 업종(deemed_input_type) 설정 있음
+#   zero_rated         : 영세율 표시
+#   law_keywords       : 법 파라미터 키(문자열 목록) - 가맹점명/업종에 하나라도 포함되면 매칭
+#   any_of             : [조건묶음, ...] 중 하나라도 만족
+# then
+#   category, non_deductible_reason, exclusion_reason (Enum 값 또는 이름), needs_review, confidence, note
+#   decided_by: default  → '기본값' 판정(AI 분류 대상)
+# handler: vehicle → 거래처 차량정보로 판정(코드)
+
+rules:
+  # ---------------------------------------------------------------- 거래 단위 판정(메모리보다 먼저)
+  - id: ti_closed_seller
+    before_memory: true
+    when:
+      doc_types: [세금계산서]
+      closed_before_tx: true
+    then:
+      category: 불공제
+      non_deductible_reason: 기타
+      needs_review: true
+      confidence: 0.6
+      note: "폐업일 이후 작성된 세금계산서 수취(사실과 다른 세금계산서 가능성) - 불공제 후보"
+
+  - id: receipt_duplicate_tax_invoice
+    before_memory: true
+    when:
+      sources: [신용카드_매입, 현금영수증_매입, 수동입력]
+      doc_types: [신용카드, 현금영수증]
+      has_matching_tax_invoice: true
+    then:
+      category: 신고제외
+      exclusion_reason: 세금계산서중복
+      confidence: 0.95
+      note: "같은 거래상대·같은 금액 세금계산서를 받아 세금계산서로 공제(카드분 제외)"
+
+  # ---------------------------------------------------------------- 의제매입
+  - id: deemed_input_invoice_food
+    when:
+      doc_types: [계산서]
+      client_deemed_input: true
+      any_of:
+        - text_regex: "(농산|수산|축산|청과|정육|육류|고기|한우|한돈|돼지|소고기|닭|계란|달걀|쌀|미곡|곡물|채소|야채|과일|생선|해산물|활어|수산물|배추|무우|고추|마늘|양파|버섯|두부|농협|수협|축협|김\\b)"
+    then:
+      category: 의제매입후보
+      confidence: 0.85
+      note: "면세 농축수산물 계산서 - 의제매입세액 공제 후보(원재료 사용분인지 확인)"
+
+  - id: deemed_input_invoice_other
+    when:
+      doc_types: [계산서]
+      client_deemed_input: true
+    then:
+      category: 의제매입후보
+      needs_review: true
+      confidence: 0.5
+      note: "의제매입 업종 거래처의 계산서 - 농축수산물 원재료인지 확인"
+
+  - id: deemed_input_receipt_food
+    when:
+      doc_types: [신용카드, 현금영수증]
+      client_deemed_input: true
+      vat_max: 0
+      text_regex: "(농산|수산|축산|청과|정육|육류|고기|한우|한돈|돼지|소고기|닭|계란|달걀|쌀|미곡|곡물|채소|야채|과일|생선|해산물|활어|수산물|배추|고추|마늘|양파|버섯|두부|농협|수협|축협|식자재|마트)"
+    then:
+      category: 의제매입후보
+      needs_review: true
+      confidence: 0.6
+      note: "부가세 없는 카드·현금영수증 식자재 매입 - 의제매입 후보(면세 농축수산물인지 확인)"
+
+  - id: invoice_tax_free
+    when:
+      doc_types: [계산서]
+    then:
+      category: 신고제외
+      exclusion_reason: 부가세없음
+      confidence: 1.0
+      note: "면세 계산서 - 매입세액 없음"
+
+  # ---------------------------------------------------------------- 카드·현금영수증 제외
+  - id: receipt_closed_seller
+    when:
+      doc_types: [신용카드, 현금영수증]
+      closed_before_tx: true
+    then:
+      category: 신고제외
+      exclusion_reason: 폐업자
+      confidence: 0.9
+      note: "폐업 가맹점 결제분 - 수령명세서 제외"
+
+  - id: receipt_simple_taxpayer
+    when:
+      doc_types: [신용카드, 현금영수증]
+      tax_type_contains: ["간이"]
+      tax_type_not_contains: ["세금계산서"]
+    then:
+      category: 신고제외
+      exclusion_reason: 간이과세자(영수증)가맹점
+      confidence: 0.95
+      note: "영수증 발급 간이과세자 가맹점 - 매입세액공제 불가"
+
+  - id: receipt_tax_free_seller
+    when:
+      doc_types: [신용카드, 현금영수증]
+      tax_type_contains: ["면세"]
+    then:
+      category: 신고제외
+      exclusion_reason: 면세사업자가맹점
+      confidence: 0.95
+      note: "면세사업자 가맹점 - 매입세액 없음"
+
+  - id: receipt_no_vat
+    when:
+      doc_types: [신용카드, 현금영수증, 증빙없음]
+      vat_max: 0
+    then:
+      category: 신고제외
+      exclusion_reason: 부가세없음
+      confidence: 1.0
+      note: "세액 0원"
+
+  - id: receipt_non_deductible_industry
+    when:
+      doc_types: [신용카드, 현금영수증]
+      any_of:
+        - law_keywords: card_purchase.non_deductible_industries
+        - text_regex: "(목욕|사우나|찜질|이발|이용원|미용|헤어|네일|피부관리|택시|고속버스|시외버스|시내버스|항공|여객|철도|코레일|KTX|SRT|지하철|입장권|극장|영화관|CGV|롯데시네마|메가박스|놀이공원|테마파크|병원|의원|치과|한의원)"
+    then:
+      category: 신고제외
+      exclusion_reason: 카드공제불가업종
+      confidence: 0.85
+      note: "영수증만 발급 가능한 업종(목욕·이발·미용·여객운송(전세버스 제외)·입장권·진료 등) - 카드 매입세액공제 불가"
+
+  - id: receipt_hometax_non_deductible
+    when:
+      doc_types: [신용카드, 현금영수증]
+      deductible_flag: false
+    then:
+      category: 신고제외
+      exclusion_reason: 기타
+      confidence: 0.8
+      note: "홈택스 '불공제' 표시 존중(가맹점 유형 등 홈택스 판정) - 공제 대상이면 홈택스에서 변경 후 재수집"
+
+  # ---------------------------------------------------------------- 불공제 후보
+  - id: entertainment
+    when:
+      text_regex: "(골프|컨트리클럽|컨트리 클럽|골프클럽|\\bCC\\b|유흥주점|단란주점|룸살롱|나이트클럽|가라오케|노래클럽|상품권|선물|기프트)"
+    then:
+      category: 불공제
+      non_deductible_reason: 접대비및이와유사한비용
+      needs_review: true
+      confidence: 0.7
+      note: "골프·유흥·상품권·선물 - 접대비 불공제 후보(복리후생 등 업무용이면 공제로 변경)"
+
+  # ---------------------------------------------------------------- 차량
+  - id: vehicle
+    handler: vehicle
+    when:
+      text_regex: "(주유|오일뱅크|칼텍스|S-?OIL|에쓰오일|SK에너지|현대오일|알뜰주유|LPG|충전소|전기차충전|정비|카센터|공업사|타이어|세차|주차|파킹|하이패스|도로공사|통행료|렌트카|렌터카|렌트|쏘카|그린카)"
+    then:
+      category: 일반매입
+      needs_review: true
+      confidence: 0.5
+      note: "차량 관련 지출 - 비영업용 소형승용차 여부 확인"
+
+  # ---------------------------------------------------------------- 세금계산서 기타
+  - id: ti_zero_vat
+    when:
+      doc_types: [세금계산서]
+      vat_max: 0
+    then:
+      category: 일반매입
+      needs_review: true
+      confidence: 0.7
+      note: "세액 0원 세금계산서 - 영세율(내국신용장·구매확인서) 수취분인지 확인(10번 금액에 포함)"
+
+  # ---------------------------------------------------------------- 고정자산
+  - id: fixed_asset
+    when:
+      supply_min: "policy:review.fixed_asset_review_amount"
+      text_regex: "(컴퓨터|노트북|데스크탑|PC|모니터|프린터|복합기|서버|에어컨|냉난방기|냉장고|냉동고|쇼케이스|세탁기|TV|텔레비전|기계|설비|장비|차량|자동차|인테리어|공사|시설|집기|가구|책상|의자|금형|POS|포스|키오스크)"
+    then:
+      category: 고정자산매입
+      needs_review: true
+      confidence: 0.7
+      note: "고정자산 후보(감가상각자산취득명세서 대상) - 소모품이면 일반매입으로 변경"
+
+  # ---------------------------------------------------------------- 기본값
+  - id: default_general
+    when: {}
+    then:
+      category: 일반매입
+      decided_by: default
+      confidence: 0.5
+      note: "규칙 미해당 - 일반매입(기본값)"
