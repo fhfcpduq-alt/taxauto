@@ -722,6 +722,9 @@ def run_recipe(
         rec = normalize_recipe(rec, default_id=str(rec.get("id", "recipe")))
     except RecipeError as e:
         return EXIT_CONFIG, {"ok": False, "error_kind": "recipe", "error": str(e)}
+    if str(rec.get("status") or "active") == "example":
+        return EXIT_CONFIG, {"ok": False, "recipe": rec["id"], "error_kind": "recipe",
+                             "error": "예시 레시피(status: example)는 재생하지 않음 — 학습모드에서 실제 레시피를 만들 것"}
     ws = ws_root or workspace_root(base, period, client_id)
     wehago_dir = ws / "wehago"
     ctx = build_context(client_id, period, base, ws, rec.get("vars"), variables)

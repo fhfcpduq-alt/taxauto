@@ -662,17 +662,19 @@ def v014_unverified_law(ci: CheckInput) -> list[ReviewItem]:
 
 
 def v015_parse_issues(ci: CheckInput) -> list[ReviewItem]:
-    if not ci.parse_issues:
+    # INFO(참고) 이슈는 안내용(예: 집계기간 밖 거래 개수)이라 '읽기 오류'로 세지 않는다
+    issues = [p for p in ci.parse_issues if p.get("severity") != Severity.INFO.value]
+    if not issues:
         return []
-    blockers = [p for p in ci.parse_issues if p.get("severity") == Severity.BLOCKER.value]
-    files = sorted({str(p.get("source_file", "")) for p in ci.parse_issues})
+    blockers = [p for p in issues if p.get("severity") == Severity.BLOCKER.value]
+    files = sorted({str(p.get("source_file", "")) for p in issues})
     detail = "\n".join(
-        f"{p.get('source_file', '')} {p.get('row_no', '')}행: {p.get('message', '')}" for p in ci.parse_issues[:MAX_DETAIL_ROWS]
+        f"{p.get('source_file', '')} {p.get('row_no', '')}행: {p.get('message', '')}" for p in issues[:MAX_DETAIL_ROWS]
     )
     return [
         _item(
             ci, "V015_PARSE_ISSUES", Severity.BLOCKER if blockers else Severity.WARN,
-            f"자료 읽기 오류 {len(ci.parse_issues)}건(파일 {len(files)}개)",
+            f"자료 읽기 오류 {len(issues)}건(파일 {len(files)}개)",
             detail=detail,
             action="해당 엑셀을 홈택스·위하고에서 다시 내려받아 inbox 에 넣고 재실행(양식이 바뀌었으면 담당자에게 알림)",
         )
