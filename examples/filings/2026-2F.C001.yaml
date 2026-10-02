@@ -1,0 +1,19 @@
+# 회차별 설정 예시 → clients/C001/filings/2026-2F.yaml 로 복사해서 쓴다 (taxauto init 이 자동 복사)
+# 형식: taxauto.registry.load_filing_settings
+filed_preliminary: false          # 예정신고 안 함(예정고지 받음) → 확정 때 7~12월 6개월 집계
+preliminary_notice_tax: 1250000   # 예정고지세액(22) — 홈택스 고지내역에서 확인한 금액
+preliminary_unrefunded: 0         # 예정신고 미환급세액(21)
+skip: false                       # true 면 이번 회차 자동처리 제외(직접 처리)
+previous_period_sales: 150000000  # 전기 과세표준(매출 변동률 검증용)
+card_credit_used_this_year: 0     # 같은 해 앞 회차에서 받은 신용카드발행공제액(연 한도 계산)
+
+# 수동 조정(신고서 칸 단위). line 은 taxauto.models.Line 이름
+adjustments:
+  - line: S_OTHER                 # (4) 과세 기타 — 증빙 없는 현금매출
+    amount: 2000000
+    tax: 200000
+    note: 대표 확인 현금매출(장부 기준)
+  - line: PENALTY                 # (26) 가산세 — 세금계산서 지연수취 등 사람이 계산한 값
+    amount: 0
+    tax: 15000
+    note: 지연수취 가산세(담당자 계산)

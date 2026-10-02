@@ -1,0 +1,37 @@
+# 거래처 명부 예시 (가상 데이터). 실제 명부는 clients/clients.yaml 에 두고 절대 커밋하지 않는다.
+# 형식: taxauto.models.Client.from_dict
+#   id            위하고 회사코드 권장(폴더명으로도 쓰임)
+#   taxpayer_type 개인일반 | 법인 | 간이
+#   deemed_input_type  "" | restaurant | manufacturing | other   (의제매입 업종)
+#   vehicles[].deductible  false = 비영업용 소형승용차(매입세액 불공제 대상)
+clients:
+  - id: C001
+    name: OO식당
+    biz_no: 123-45-67890
+    taxpayer_type: 개인일반
+    industry: 음식점업/한식
+    industry_code: "552101"
+    prior_year_supply: 300000000
+    has_tax_free_business: false
+    deemed_input_type: restaurant
+    vehicles:
+      - plate: 12가3456
+        model: 승용 2000cc
+        deductible: false
+    contact_name: ""
+    notes: 배달앱 매출(배민·쿠팡이츠) 있음
+    active: true
+
+  - id: C002
+    name: (주)민테크
+    biz_no: 220-81-23456
+    taxpayer_type: 법인
+    industry: 제조업/전자부품
+    industry_code: ""
+    prior_year_supply: 2500000000
+    has_tax_free_business: false
+    deemed_input_type: ""
+    vehicles: []
+    contact_name: 김경리
+    notes: ""
+    active: true

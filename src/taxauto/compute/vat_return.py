@@ -14,6 +14,7 @@ compute_return(txns, client, filing, law, policy, settings) -> VatReturn
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from fractions import Fraction
@@ -520,57 +521,79 @@ def _card_issue_credit(client: Client, settings: FilingSettings, base: int, paya
 # ---------------------------------------------------------------------------
 
 
-def _deemed_rate_key(client: Client, lr: _LawReader, sales_base: int, issue) -> str | None:
+_BOUND_RE = re.compile(r"(?:le_(\d+)m|(\d+)m_(\d+)m|gt_(\d+)m)$")
+
+
+def _bounds_from_key(key: str) -> tuple[int | None, int | None]:
+    """키 이름의 구간 표기(le_100m / 100m_200m / gt_200m, m=백만원) → (하한 초과, 상한 이하)."""
+    m = _BOUND_RE.search(key)
+    if not m:
+        return None, None
+    mil = 1_000_000  # 키 이름 표기 단위(백만원) - 세법 수치 아님
+    if m.group(1):
+        return None, int(m.group(1)) * mil
+    if m.group(2):
+        return int(m.group(2)) * mil, int(m.group(3)) * mil
+    return int(m.group(4)) * mil, None
+
+
+def _in_bounds(key: str, base: int) -> bool:
+    lo, hi = _bounds_from_key(key)
+    return (lo is None or base > lo) and (hi is None or base <= hi)
+
+
+_BAKERY_RE = re.compile(r"(과자|제과|베이커리|빵|떡|도정|제분|방앗간)")
+
+
+def _deemed_rate_key(client: Client, lr: _LawReader, base6: int, issue) -> str | None:
     t = client.deemed_input_type
     corp = client.is_corporation
     if t == "restaurant":
         if corp:
             return "deemed_input.restaurant_corp"
-        thr = lr.get("deemed_input.restaurant_individual_le_threshold", "", warn=False)
-        if thr is not None and sales_base <= int(thr):
-            return "deemed_input.restaurant_individual_le_200m"
-        if thr is None:
-            issue(
-                "C003_DEEMED_INPUT_RATE",
-                Severity.WARN,
-                "의제매입 공제율: 개인 음식점 과세표준 기준 확인 필요(낮은 율 적용)",
-                detail="과세표준 기준 금액 파라미터(deemed_input.restaurant_individual_le_threshold)가 없어 "
-                "deemed_input.restaurant_individual 율로 계산했습니다.",
-                action="과세표준이 기준 이하이면 위하고 의제매입세액공제신고서에서 높은 공제율로 변경",
-            )
+        k = "deemed_input.restaurant_individual_le_200m"
+        if _in_bounds(k, base6) and lr.get(k, "", warn=False) is not None:
+            return k
         return "deemed_input.restaurant_individual"
     if t == "manufacturing":
+        if not corp and _BAKERY_RE.search(client.industry or ""):
+            k = "deemed_input.manufacturing_individual_bakery"
+        else:
+            k = "deemed_input.manufacturing_individual_sme"
         issue(
             "C003_DEEMED_INPUT_RATE",
             Severity.WARN,
             "의제매입 공제율: 제조업 세부업종 확인 필요",
-            detail="중소·개인 제조업 기본율로 계산했습니다. 과자점·도정·떡류 등은 더 높은 율, 중소기업 외 법인은 낮은 율입니다.",
+            detail=f"거래처 업종 '{client.industry}' 기준으로 {k} 율을 적용했습니다. "
+            "과자점·도정·제분·떡방앗간 개인은 우대율, 중소기업이 아닌 법인은 기타 율입니다.",
             action="위하고 의제매입세액공제신고서에서 업종별 공제율 확인",
         )
-        return "deemed_input.manufacturing_individual_sme"
+        return k
     if t == "other":
         return "deemed_input.other"
     return None
 
 
-def _deemed_limit_ratio(client: Client, lr: _LawReader, sales_base: int) -> Fraction | None:
-    """deemed_input.limit.* 키를 관대한 형식으로 해석. 숫자(비율) 또는 [{upto, ratio}] 구간 목록."""
-    who = "corp" if client.is_corporation else "individual"
-    for key in (f"deemed_input.limit.{client.deemed_input_type}_{who}", f"deemed_input.limit.{who}"):
-        v = lr.get(key, "", warn=False)
-        if v is None:
+def _deemed_limit_ratio(client: Client, lr: _LawReader, base6: int) -> tuple[Fraction | None, str]:
+    """한도율 키 선택: 법인 / 개인 음식점 / 개인 기타 + 과세기간 과세표준 구간(키 이름에서 해석)."""
+    if client.is_corporation:
+        keys = ["deemed_input.limit.corp"]
+    elif client.deemed_input_type == "restaurant":
+        keys = [
+            "deemed_input.limit.individual_restaurant_le_100m",
+            "deemed_input.limit.individual_restaurant_100m_200m",
+            "deemed_input.limit.individual_restaurant_gt_200m",
+        ]
+    else:
+        keys = ["deemed_input.limit.individual_other_le_200m", "deemed_input.limit.individual_other_gt_200m"]
+    for k in keys:
+        if not _in_bounds(k, base6):
             continue
-        if isinstance(v, (int, float, str)):
-            return to_fraction(v)
-        if isinstance(v, list):
-            for tier in v:
-                if not isinstance(tier, dict):
-                    continue
-                upto = tier.get("upto", tier.get("max"))
-                r = tier.get("ratio", tier.get("value"))
-                if r is not None and (upto is None or sales_base <= int(upto)):
-                    return to_fraction(r)
-    return None
+        v = lr.get(k, "", warn=False)
+        if v is None:
+            return None, k
+        return to_fraction(v), k
+    return None, keys[0]
 
 
 def _deemed_input(client: Client, base: int, sales_base: int, filing: Filing, lr: _LawReader, issue, notes, ids) -> tuple[int, int]:
@@ -583,7 +606,15 @@ def _deemed_input(client: Client, base: int, sales_base: int, filing: Filing, lr
             tx_ids=ids,
         )
         return 0, base
-    key = _deemed_rate_key(client, lr, sales_base, issue)
+    months = _months_between(filing.coverage_start, filing.coverage_end)
+    # 공제율·한도 구간은 과세기간(6개월) 과세표준 기준 → 집계기간이 짧으면 6개월 환산 추정
+    base6 = sales_base if months >= 6 else int(Fraction(sales_base) * 6 / max(months, 1))
+    if months < 6:
+        notes.append(
+            f"의제매입 공제율·한도 구간은 과세기간(6개월) 과세표준 기준인데 집계기간이 {months}개월이라 "
+            f"{sales_base:,}원을 6개월 {base6:,}원으로 환산해 판정했습니다(확정신고 때 과세기간 전체로 정산 필요)."
+        )
+    key = _deemed_rate_key(client, lr, base6, issue)
     if key is None:
         issue("C003_DEEMED_INPUT_TYPE", Severity.WARN, f"알 수 없는 의제매입 업종: {client.deemed_input_type} - 0원 처리", tx_ids=ids)
         return 0, base
@@ -591,23 +622,36 @@ def _deemed_input(client: Client, base: int, sales_base: int, filing: Filing, lr
     if rate is None:
         return 0, base
     used_base = base
-    ratio = _deemed_limit_ratio(client, lr, sales_base)
+    if filing.period.kind == "P":
+        notes.append("예정신고는 의제매입 한도 없이 공제하고 확정신고 때 과세기간(6개월) 한도로 정산합니다.")
+        credit = mul_floor(used_base, rate)
+        notes.append(f"의제매입세액: 매입가액 {used_base:,}원 × {rate}({key}) = {credit:,}원 (의제매입세액공제신고서 첨부 필요).")
+        return credit, used_base
+    ratio, lkey = _deemed_limit_ratio(client, lr, base6)
+    if months < 6:
+        issue(
+            "C003_DEEMED_INPUT_SETTLE",
+            Severity.WARN,
+            "의제매입 한도 확정 정산 필요(예정신고분 포함 6개월 기준)",
+            detail="예정신고를 한 확정 회차라 이번 집계기간(3개월)만으로 한도를 근사 계산했습니다. "
+            "한도는 과세기간 전체 과세표준·매입가액으로 계산하고 예정신고 때 공제받은 금액을 빼야 합니다.",
+            action="위하고 의제매입세액공제신고서(확정)에서 예정분 포함 한도 정산 후 14번 의제매입 금액 확인",
+            tx_ids=ids,
+        )
     if ratio is None:
         issue(
             "C003_DEEMED_INPUT_LIMIT",
             Severity.WARN,
             "의제매입세액 한도 미적용 - 한도 계산 필요",
-            detail=f"한도율 법 파라미터(deemed_input.limit.*)가 없어 매입가액 {base:,}원 전액에 공제율을 적용했습니다.",
+            detail=f"한도율 법 파라미터({lkey})를 찾지 못해 매입가액 {base:,}원 전액에 공제율을 적용했습니다.",
             action="위하고 의제매입세액공제신고서에서 과세표준 × 한도율 한도를 확인해 14번 의제매입 금액 조정",
             tx_ids=ids,
         )
     else:
         limit_base = int(Fraction(sales_base) * ratio)
         if base > limit_base:
-            notes.append(f"의제매입 한도: 과세표준 {sales_base:,}원 × 한도율 {ratio} = {limit_base:,}원까지만 공제대상으로 반영했습니다.")
+            notes.append(f"의제매입 한도: 과세표준 {sales_base:,}원 × 한도율 {ratio}({lkey}) = {limit_base:,}원까지만 공제대상으로 반영했습니다.")
             used_base = limit_base
-        if filing.period.kind == "P" or filing.filed_preliminary:
-            notes.append("의제매입 한도는 과세기간(6개월) 단위로 확정신고 때 정산해야 합니다(이번 계산은 집계기간 기준 근사).")
     credit = mul_floor(used_base, rate)
-    notes.append(f"의제매입세액: 매입가액 {used_base:,}원 × {rate} = {credit:,}원 (의제매입세액공제신고서 첨부 필요).")
+    notes.append(f"의제매입세액: 매입가액 {used_base:,}원 × {rate}({key}) = {credit:,}원 (의제매입세액공제신고서 첨부 필요).")
     return credit, used_base
